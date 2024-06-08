@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Welcome, {{ session.username }}!</h2>
+<div class="summary">
+    <h3>Summary</h3>
+    <p>Total Ponds: {{ sites|length }}</p>
+    <p>Cumulative Area: {{ cumulative_area }} sq meters</p>
+    <p>Cumulative Prawns Cultivated: {{ cumulative_prawns }}</p>
+</div>
+<div class="site-list">
+    <h3>Your Sites</h3>
+    <ul>
+        {% for site in sites %}
+            <li>
+                <strong>{{ site.site_name }}</strong><br>
+                Ponds: {{ site.num_ponds }}<br>
+                Area: {{ site.area_of_ponds }} sq meters<br>
+                Prawns: {{ site.prawn_count }}<br>
+                Location: {{ site.location }}
+            </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endblock %}
