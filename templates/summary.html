@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Summary</title>
+    <title>Summary - Live Feed Stock Management</title>
     <!-- Bootstrap CSS -->
     <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
     <style>
@@ -20,8 +20,12 @@
     </style>
 </head>
 <body>
+    <!-- Navigation bar -->
     <nav class="navbar navbar-expand-lg navbar-light bg-light">
         <a class="navbar-brand" href="#">Live Feed Stock Management</a>
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
         <div class="collapse navbar-collapse" id="navbarNav">
             <ul class="navbar-nav ml-auto">
                 <li class="nav-item">
@@ -36,6 +40,8 @@
 
     <div class="container">
         <h1 class="text-center mb-4">Summary</h1>
+
+        <!-- User Details Card -->
         <div class="card">
             <div class="card-header">
                 User Details
@@ -45,6 +51,8 @@
                 <p><strong>Mobile:</strong> {{ mobile }}</p>
             </div>
         </div>
+
+        <!-- Overall Summary Card -->
         <div class="card">
             <div class="card-header">
                 Overall Summary
@@ -55,6 +63,8 @@
                 <p><strong>Total Prawn Count:</strong> {{ total_prawn_count }}</p>
             </div>
         </div>
+
+        <!-- Site and Ponds Cards -->
         {% for site in sites %}
         <div class="card">
             <div class="card-header">
@@ -68,6 +78,12 @@
                     <div class="card-body">
                         <p><strong>Pond Area:</strong> {{ pond.area }} hectares</p>
                         <p><strong>Prawn Count:</strong> {{ pond.prawn_count }}</p>
+                        <p><strong>Feed Per Day:</strong> {{ pond.feed_per_day }} kg</p>
+                        <p><strong>Feed Increase Per Day:</strong> {{ pond.feed_increase_per_day }} kg</p>
+                        <p><strong>Accumulated Feed:</strong> {{ pond.accumulated_feed }} kg</p>
+                        <p><strong>Feed Code:</strong> {{ pond.feed_code }}</p>
+                        <p><strong>Creation Date:</strong> {{ pond.creation_date }}</p>
+                        <p><strong>Current Day:</strong> {{ pond.current_day }}</p>
                     </div>
                 </div>
                 {% endfor %}
