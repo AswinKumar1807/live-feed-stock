@@ -3,103 +3,183 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Summary - Live Feed Stock Management</title>
-    <!-- Bootstrap CSS -->
-    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <title>Summary</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <style>
+        /* Custom CSS for modern design */
         body {
-            padding-top: 20px;
-            background-color: #f8f9fa;
+            background-color: #f8f9fa; /* Light grey background */
+            color: #495057; /* Dark grey text */
         }
-        .container {
-            margin-top: 20px;
+        .jumbotron {
+            background-color: #007bff; /* Blue background for jumbotron */
+            color: #fff; /* White text */
+            border-radius: 10px;
         }
         .card {
-            margin-bottom: 20px;
+            transition: transform 0.2s ease-in-out; /* Smooth card animation */
+            border-radius: 10px;
+            border: none;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.1); /* Soft shadow */
+        }
+        .card-header {
+            background-color: #007bff; /* Blue header background */
+            color: #fff; /* White text */
+            border-radius: 10px 10px 0 0;
+        }
+        .card-body {
+            background-color: #fff; /* White background for card body */
+            border-radius: 0 0 10px 10px;
+        }
+        .table {
+            background-color: #fff; /* White background for tables */
+        }
+        .btn-warning {
+            background-color: #ffc107; /* Yellow button */
+            border-color: #ffc107; /* Yellow border */
+            color: #212529; /* Dark text */
+        }
+        .btn-warning:hover {
+            background-color: #ffca2c; /* Lighter yellow on hover */
+            border-color: #ffca2c;
+            color: #212529;
+        }
+        .footer {
+            background-color: #343a40; /* Dark footer background */
+            color: #fff; /* White text */
+            text-align: center;
+        }
+        .navbar {
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Navbar shadow */
         }
     </style>
 </head>
 <body>
-    <!-- Navigation bar -->
     <nav class="navbar navbar-expand-lg navbar-light bg-light">
-        <a class="navbar-brand" href="#">Live Feed Stock Management</a>
-        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
-            <span class="navbar-toggler-icon"></span>
-        </button>
+        <a class="navbar-brand" href="#">Prawn Farm Management</a>
         <div class="collapse navbar-collapse" id="navbarNav">
             <ul class="navbar-nav ml-auto">
                 <li class="nav-item">
-                    <a class="nav-link" href="/profile">Profile</a>
+                    <a class="nav-link" href="{{ url_for('profile') }}" id="profile-link">Profile</a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="/logout">Sign Out</a>
+                    <a class="nav-link" href="{{ url_for('logout') }}" id="logout-link">Logout</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link btn btn-primary text-white" href="{{ url_for('download_feed_sheet') }}" id="download-feed-link">Download Feed Sheet</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link btn btn-success text-white" id="download-pdf">Print Summary Sheet</a>
                 </li>
             </ul>
         </div>
     </nav>
 
-    <div class="container">
-        <h1 class="text-center mb-4">Summary</h1>
-
-        <!-- User Details Card -->
-        <div class="card">
-            <div class="card-header">
-                User Details
-            </div>
-            <div class="card-body">
-                <p><strong>Username:</strong> {{ username }}</p>
-                <p><strong>Mobile:</strong> {{ mobile }}</p>
-            </div>
+    <div class="container mt-5">
+        <div class="jumbotron">
+            <h1 class="display-4">Welcome, {{ username }}!</h1>
+            <p class="lead"><strong>Mobile:</strong> {{ mobile }}</p>
         </div>
 
-        <!-- Overall Summary Card -->
-        <div class="card">
+        <div class="card mb-4">
             <div class="card-header">
-                Overall Summary
+                <h2>Overall Summary</h2>
             </div>
             <div class="card-body">
                 <p><strong>Total Ponds:</strong> {{ total_ponds }}</p>
-                <p><strong>Total Area:</strong> {{ total_area }} hectares</p>
+                <p><strong>Total Area:</strong> {{ total_area }} sq.m</p>
                 <p><strong>Total Prawn Count:</strong> {{ total_prawn_count }}</p>
             </div>
         </div>
 
-        <!-- Site and Ponds Cards -->
         {% for site in sites %}
-        <div class="card">
+        <div class="card mb-4">
             <div class="card-header">
-                Site: {{ site.name }}
+                <h3>Site: {{ site.name }} ({{ site.location }})</h3>
             </div>
             <div class="card-body">
-                <p><strong>Location:</strong> {{ site.location }}</p>
-                <h5>Ponds</h5>
-                {% for pond in site.ponds %}
-                <div class="card mb-2">
-                    <div class="card-body">
-                        <p><strong>Pond Area:</strong> {{ pond.area }} hectares</p>
-                        <p><strong>Prawn Count:</strong> {{ pond.prawn_count }}</p>
-                        <p><strong>Feed Per Day:</strong> {{ pond.feed_per_day }} kg</p>
-                        <p><strong>Feed Increase Per Day:</strong> {{ pond.feed_increase_per_day }} kg</p>
-                        <p><strong>Accumulated Feed:</strong> {{ pond.accumulated_feed }} kg</p>
-                        <p><strong>Feed Code:</strong> {{ pond.feed_code }}</p>
-                        <p><strong>Creation Date:</strong> {{ pond.creation_date }}</p>
-                        <p><strong>Current Day:</strong> {{ pond.current_day }}</p>
-                    </div>
+                <p><strong>Total Area:</strong> {{ site.total_area }} sq.m</p>
+                <p><strong>Total Prawn Count:</strong> {{ site.total_prawn_count }}</p>
+                <h4>Ponds</h4>
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover">
+                        <thead class="thead-light">
+                            <tr>
+                                <th>Pond ID</th>
+                                <th>Area</th>
+                                <th>Prawn Count</th>
+                                <th>Creation Date</th>
+                                <th>Current Day</th>
+                                <th>Feed Per Day (kg)</th>
+                                <th>Feed Increase Per Day (kg)</th>
+                                <th>Accumulated Feed (kg)</th>
+                                <th>Feed Code</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for pond in site.ponds %}
+                            <tr>
+                                <td>{{ pond.pond_id }}</td>
+                                <td>{{ pond.area }}</td>
+                                <td>{{ pond.prawn_count }}</td>
+                                <td>{{ pond.creation_date }}</td>
+                                <td>{{ pond.current_day }}</td>
+                                <td>{{ pond.feed_per_day }}</td>
+                                <td>{{ pond.feed_increase_per_day }}</td>
+                                <td>{{ pond.accumulated_feed }}</td>
+                                <td>{{ pond.feed_code }}</td>
+                                <td>
+                                    <a href="{{ url_for('edit_pond', pond_id=pond.pond_id) }}" class="btn btn-warning btn-sm edit-btn" data-pond-id="{{ pond.pond_id }}">Edit</a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
                 </div>
-                {% endfor %}
             </div>
         </div>
         {% endfor %}
-
-        <!-- Download Feed Sheet Button -->
-        <div class="text-center mt-4">
-            <a href="{{ url_for('download_feed_sheet') }}" class="btn btn-primary">Download Feed sheet</a>
-        </div>
     </div>
 
-    <!-- Bootstrap JS and dependencies -->
-    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.3/dist/umd/popper.min.js"></script>
-    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <footer class="footer mt-auto py-3 bg-light">
+        <div class="container">
+            <span class="text-muted">Prawn Farm Management System &copy; 2024</span>
+        </div>
+    </footer>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.9.2/html2pdf.bundle.js"></script>
+    <script>
+        document.getElementById('download-pdf').addEventListener('click', function() {
+            // Disable links temporarily for PDF generation
+            const profileLink = document.getElementById('profile-link');
+            const logoutLink = document.getElementById('logout-link');
+            const downloadFeedLink = document.getElementById('download-feed-link');
+            const editButtons = Array.from(document.querySelectorAll('.edit-btn'));
+
+            profileLink.removeAttribute('href');
+            logoutLink.removeAttribute('href');
+            downloadFeedLink.removeAttribute('href');
+            editButtons.forEach(button => button.removeAttribute('href'));
+
+            var element = document.body;
+            html2pdf().from(element).set({
+                margin: 20,
+                filename: 'summary.pdf',
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 3 },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
+            }).save().then(() => {
+                // Re-enable links after PDF generation completes
+                profileLink.setAttribute('href', "{{ url_for('profile') }}");
+                logoutLink.setAttribute('href', "{{ url_for('logout') }}");
+                downloadFeedLink.setAttribute('href', "{{ url_for('download_feed_sheet') }}");
+                editButtons.forEach(button => {
+                    const pondId = button.dataset.pondId;
+                    button.setAttribute('href', `/edit_pond/${pondId}`);
+                });
+            });
+        });
+    </script>
 </body>
 </html>

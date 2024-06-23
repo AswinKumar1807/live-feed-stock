@@ -91,6 +91,54 @@ for index, row in df.iterrows():
         "feed_code": str(row['feed_code'])
     })
 
+@app.route('/edit_pond/<int:pond_id>', methods=['GET', 'POST'])
+def edit_pond(pond_id):
+    if 'loggedin' not in session:
+        return redirect(url_for('login'))
+    
+    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+    
+    if request.method == 'POST':
+        # Fetch updated details from the form
+        new_prawn_count = int(request.form['prawn_count'])
+        
+        # Get current details of the pond to keep creation date and current day unchanged
+        cursor.execute('SELECT prawn_count, accumulated_feed, current_day FROM ponds WHERE id = %s', (pond_id,))
+        pond = cursor.fetchone()
+        
+        if not pond:
+            flash('Pond not found!', 'danger')
+            return redirect(url_for('summary'))
+
+        current_prawn_count = pond['prawn_count']
+        current_accumulated_feed = pond['accumulated_feed']
+        current_day = pond['current_day']
+
+        # Update pond details in the database without changing creation date or current day
+        cursor.execute('UPDATE ponds SET prawn_count = %s WHERE id = %s', 
+                       (new_prawn_count, pond_id))
+
+        # Recalculate accumulated feed
+        new_accumulated_feed = calculate_accumulated_feed(new_prawn_count, current_day)
+
+        # Update accumulated feed in the database
+        cursor.execute('UPDATE ponds SET accumulated_feed = %s WHERE id = %s', 
+                       (new_accumulated_feed, pond_id))
+        
+        mysql.connection.commit()
+        
+        cursor.close()
+        flash('Pond updated successfully!', 'success')
+        return redirect(url_for('summary'))
+    
+    # Fetch existing pond details
+    cursor.execute('SELECT * FROM ponds WHERE id = %s', (pond_id,))
+    pond = cursor.fetchone()
+    
+    cursor.close()
+    return render_template('edit_pond.html', pond=pond)
+
+
 def calculate_feed_details(prawn_count, day):
     if day > 120:
         return {
@@ -114,6 +162,13 @@ def calculate_feed_details(prawn_count, day):
 
     return scaled_feed_details
 
+def calculate_accumulated_feed(prawn_count, current_day):
+    total_accumulated_feed = 0
+    for day in range(1, current_day + 1):
+        feed_details = calculate_feed_details(prawn_count, day)
+        if feed_details:
+            total_accumulated_feed += feed_details["feed_per_day"]
+    return total_accumulated_feed
 
 @app.route('/download_feed_sheet')
 def download_feed_sheet():
@@ -170,7 +225,7 @@ def download_feed_sheet():
     buffer.seek(0)
     
     return send_file(buffer, as_attachment=True, download_name='feed_sheet.xlsx', mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    
+
 @app.route('/')
 def index():
     return redirect(url_for('login'))
