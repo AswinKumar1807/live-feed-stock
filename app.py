@@ -5,6 +5,9 @@ from flask_bcrypt import Bcrypt
 import MySQLdb.cursors
 import re
 import pandas as pd
+import io
+from flask import send_file
+
 
 app = Flask(__name__)
 app.config.from_object('config.Config')
@@ -111,6 +114,63 @@ def calculate_feed_details(prawn_count, day):
 
     return scaled_feed_details
 
+
+@app.route('/download_feed_sheet')
+def download_feed_sheet():
+    if 'loggedin' not in session:
+        return redirect(url_for('login'))
+    
+    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+    
+    # Fetch site and pond details
+    cursor.execute('''
+        SELECT sites.id as site_id, sites.name, sites.location, ponds.id as pond_id, ponds.area, ponds.prawn_count, ponds.creation_date
+        FROM sites
+        JOIN ponds ON sites.id = ponds.site_id
+        WHERE sites.user_id = %s
+    ''', (session['id'],))
+    ponds = cursor.fetchall()
+    
+    cursor.close()
+    
+    feed_sheets = []
+    
+    for pond in ponds:
+        pond_feed_data = []
+        
+        for day in range(1, 121):
+            feed_details = calculate_feed_details(pond['prawn_count'], day)
+            if feed_details is None:
+                feed_details = {
+                    'feed_per_day': 'N/A',
+                    'feed_increase_per_day': 'N/A',
+                    'accumulated_feed': 'N/A',
+                    'feed_code': 'N/A'
+                }
+            pond_feed_data.append({
+                'Day': day,
+                'Feed Per Day (kg)': feed_details['feed_per_day'],
+                'Feed Increase Per Day (kg)': feed_details['feed_increase_per_day'],
+                'Accumulated Feed (kg)': feed_details['accumulated_feed'],
+                'Feed Code': feed_details['feed_code']
+            })
+        
+        pond_df = pd.DataFrame(pond_feed_data)
+        feed_sheets.append({
+            'pond_id': pond['pond_id'],
+            'pond_data': pond_df
+        })
+    
+    # Create a Pandas Excel writer using an in-memory buffer
+    buffer = io.BytesIO()
+    with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+        for sheet in feed_sheets:
+            sheet['pond_data'].to_excel(writer, sheet_name=f'Pond {sheet["pond_id"]}', index=False)
+    
+    buffer.seek(0)
+    
+    return send_file(buffer, as_attachment=True, download_name='feed_sheet.xlsx', mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    
 @app.route('/')
 def index():
     return redirect(url_for('login'))
