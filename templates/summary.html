@@ -60,7 +60,7 @@
         <div class="collapse navbar-collapse" id="navbarNav">
             <ul class="navbar-nav ml-auto">
                 <li class="nav-item">
-                    <a class="nav-link" href="{{ url_for('profile') }}" id="profile-link">Profile</a>
+                    <a class="nav-link" href="{{ url_for('profile') }}" id="profile-link">Add New Sites</a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link" href="{{ url_for('logout') }}" id="logout-link">Logout</a>
@@ -87,7 +87,7 @@
             </div>
             <div class="card-body">
                 <p><strong>Total Ponds:</strong> {{ total_ponds }}</p>
-                <p><strong>Total Area:</strong> {{ total_area }} sq.m</p>
+                <p><strong>Total Area:</strong> {{ total_area | round(2) }} hectare </p>
                 <p><strong>Total Prawn Count:</strong> {{ total_prawn_count }}</p>
             </div>
         </div>
@@ -98,7 +98,7 @@
                 <h3>Site: {{ site.name }} ({{ site.location }})</h3>
             </div>
             <div class="card-body">
-                <p><strong>Total Area:</strong> {{ site.total_area }} sq.m</p>
+                <p><strong>Total Area:</strong> {{ site.total_area }} hectare </p>
                 <p><strong>Total Prawn Count:</strong> {{ site.total_prawn_count }}</p>
                 <h4>Ponds</h4>
                 <div class="table-responsive">
@@ -120,7 +120,7 @@
                         <tbody>
                             {% for pond in site.ponds %}
                             <tr>
-                                <td>{{ pond.pond_id }}</td>
+                                <td>{{ site.name }}-{{ pond.pond_id }}</td>
                                 <td>{{ pond.area }}</td>
                                 <td>{{ pond.prawn_count }}</td>
                                 <td>{{ pond.creation_date }}</td>

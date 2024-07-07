@@ -46,7 +46,7 @@ def init_db():
                 feed_increase_per_day FLOAT NOT NULL,
                 accumulated_feed FLOAT NOT NULL,
                 feed_code VARCHAR(100) NOT NULL,
-                creation_date DATE NOT NULL DEFAULT CURRENT_DATE,
+                creation_date DATE NOT NULL,
                 current_day INT NOT NULL,
                 FOREIGN KEY (site_id) REFERENCES sites(id)
             )
@@ -179,7 +179,7 @@ def download_feed_sheet():
     
     # Fetch site and pond details
     cursor.execute('''
-        SELECT sites.id as site_id, sites.name, sites.location, ponds.id as pond_id, ponds.area, ponds.prawn_count, ponds.creation_date
+        SELECT sites.id as site_id, sites.name as site_name, sites.location, ponds.id as pond_id, ponds.area, ponds.prawn_count, ponds.creation_date
         FROM sites
         JOIN ponds ON sites.id = ponds.site_id
         WHERE sites.user_id = %s
@@ -212,6 +212,7 @@ def download_feed_sheet():
         
         pond_df = pd.DataFrame(pond_feed_data)
         feed_sheets.append({
+            'site_name': pond['site_name'],
             'pond_id': pond['pond_id'],
             'pond_data': pond_df
         })
@@ -220,7 +221,8 @@ def download_feed_sheet():
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
         for sheet in feed_sheets:
-            sheet['pond_data'].to_excel(writer, sheet_name=f'Pond {sheet["pond_id"]}', index=False)
+            sheet_name = f'{sheet["site_name"]}-{sheet["pond_id"]}'
+            sheet['pond_data'].to_excel(writer, sheet_name=sheet_name, index=False)
     
     buffer.seek(0)
     

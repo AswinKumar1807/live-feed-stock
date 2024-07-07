@@ -10,7 +10,7 @@
     <nav>
         {% if session['loggedin'] %}
             <a href="{{ url_for('summary') }}">Home</a>
-            <a href="{{ url_for('profile') }}">Profile</a>
+            <a href="{{ url_for('profile') }}">Add New Sites</a>
             <a href="{{ url_for('logout') }}">Logout</a>
         {% endif %}
     </nav>
