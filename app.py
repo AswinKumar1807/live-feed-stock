@@ -152,7 +152,7 @@ def calculate_feed_details(prawn_count, day):
     if not feed_info:
         return None
 
-    scale_factor = prawn_count / 1000.0
+    scale_factor = prawn_count / 100000.0
     scaled_feed_details = {
         "feed_per_day": feed_info["feed_per_day"] * scale_factor,
         "feed_increase_per_day": feed_info["feed_increase_per_day"],
