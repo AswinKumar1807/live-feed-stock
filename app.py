@@ -443,6 +443,138 @@ def summary():
                            sites=list(site_data.values()),
                            site_feed_summary=site_feed_summary)
 
+@app.route('/admin')
+def admin():
+    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+    
+    # Fetch total number of users
+    cursor.execute('SELECT COUNT(*) as total_users FROM users')
+    total_users = cursor.fetchone()['total_users']
+
+    # Fetch total number of sites
+    cursor.execute('SELECT COUNT(*) as total_sites FROM sites')
+    total_sites = cursor.fetchone()['total_sites']
+
+    # Fetch total number of ponds and total prawn count
+    cursor.execute('SELECT COUNT(*) as total_ponds, SUM(prawn_count) as total_prawn_count FROM ponds')
+    pond_summary = cursor.fetchone()
+    total_ponds = pond_summary['total_ponds']
+    total_prawn_count = pond_summary['total_prawn_count']
+
+    # Fetch detailed feed summary per site
+    cursor.execute('''
+        SELECT sites.id as site_id, sites.name as site_name, COALESCE(SUM(ponds.feed_per_day), 0) as feed_per_day
+        FROM sites
+        LEFT JOIN ponds ON sites.id = ponds.site_id
+        GROUP BY sites.id
+    ''')
+    feed_summary = cursor.fetchall()
+
+    # Calculate the total feed required per day from the feed_summary
+    total_feed_per_day = sum(site['feed_per_day'] for site in feed_summary)
+
+    # Fetch user-specific details including total feed per day
+    cursor.execute('''
+        SELECT users.id, users.username, COUNT(sites.id) as site_count, COUNT(ponds.id) as pond_count, 
+               SUM(ponds.prawn_count) as total_prawn_count, COALESCE(SUM(ponds.feed_per_day), 0) as total_feed_per_day
+        FROM users
+        LEFT JOIN sites ON users.id = sites.user_id
+        LEFT JOIN ponds ON sites.id = ponds.site_id
+        GROUP BY users.id
+    ''')
+    user_details = cursor.fetchall()
+    
+    cursor.close()
+
+    return render_template('admin_dashboard.html', 
+                           total_users=total_users, 
+                           total_sites=total_sites,
+                           total_ponds=total_ponds, 
+                           total_prawn_count=total_prawn_count,
+                           total_feed_per_day=total_feed_per_day,
+                           feed_summary=feed_summary,
+                           user_details=user_details)
+
+
+@app.route('/admin/user/<int:user_id>')
+def user_details(user_id):
+
+    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+    
+    # Fetch user details
+    cursor.execute('SELECT username FROM users WHERE id = %s', (user_id,))
+    user = cursor.fetchone()
+    
+    # Fetch sites and ponds details for the user
+    cursor.execute('''
+        SELECT sites.id as site_id, sites.name as site_name, sites.location, 
+               ponds.id as pond_id, ponds.area, ponds.prawn_count, ponds.creation_date
+        FROM sites
+        LEFT JOIN ponds ON sites.id = ponds.site_id
+        WHERE sites.user_id = %s
+    ''', (user_id,))
+    ponds = cursor.fetchall()
+
+    cursor.close()
+
+    site_data = {}
+    site_feed_summary = {}
+    today_date = datetime.datetime.now().date()
+    
+    for pond in ponds:
+        site_id = pond['site_id']
+        if site_id not in site_data:
+            site_data[site_id] = {
+                'id': site_id,
+                'name': pond['site_name'],
+                'location': pond['location'],
+                'total_area': 0,
+                'total_prawn_count': 0,
+                'total_feed_per_day': 0,
+                'ponds': []
+            }
+            site_feed_summary[site_id] = {
+                'site_name': pond['site_name'],
+                'total_feed_per_day': 0,
+            }
+
+        site_data[site_id]['total_area'] += pond['area']
+        site_data[site_id]['total_prawn_count'] += pond['prawn_count']
+
+        # Calculate current_day for each pond based on its creation_date
+        if pond['creation_date']:
+            pond_creation_date = pond['creation_date']
+            current_day = (today_date - pond_creation_date).days + 1
+            feed_details = calculate_feed_details(pond['prawn_count'], current_day)
+            if feed_details is None:
+                feed_details = {
+                    'feed_per_day': 0,
+                    'feed_increase_per_day': 0,
+                    'accumulated_feed': 0,
+                    'feed_code': 'N/A'
+                }
+            pond.update(feed_details)
+            pond['current_day'] = current_day
+        else:
+            pond.update({
+                'feed_per_day': 0,
+                'feed_increase_per_day': 0,
+                'accumulated_feed': 0,
+                'feed_code': 'N/A',
+                'current_day': 0
+            })
+
+        # Add feed details to the site-specific summary
+        site_data[site_id]['total_feed_per_day'] += pond['feed_per_day']
+        site_feed_summary[site_id]['total_feed_per_day'] += pond['feed_per_day']
+
+        pond['creation_date'] = pond['creation_date'].strftime('%Y-%m-%d') if pond['creation_date'] else 'N/A'
+        site_data[site_id]['ponds'].append(pond)
+
+    return render_template('user_details.html', 
+                           user=user, 
+                           site_feed_summary=site_feed_summary.values())
+
 
 if __name__ == '__main__':
     app.run(debug=True)
