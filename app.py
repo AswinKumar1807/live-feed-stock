@@ -378,7 +378,9 @@ def summary():
     cursor.close()
     
     site_data = {}
+    site_feed_summary = {}
     today_date = datetime.datetime.now().date()
+    
     for pond in ponds:
         site_id = pond['site_id']
         if site_id not in site_data:
@@ -390,6 +392,7 @@ def summary():
                 'total_prawn_count': 0,
                 'ponds': []
             }
+            site_feed_summary[site_id] = {}
 
         site_data[site_id]['total_area'] += pond['area']
         site_data[site_id]['total_prawn_count'] += pond['prawn_count']
@@ -417,6 +420,16 @@ def summary():
                 'current_day': 'N/A'
             })
         
+        # Add feed details to the site-specific summary
+        feed_code = pond['feed_code']
+        if feed_code not in site_feed_summary[site_id]:
+            site_feed_summary[site_id][feed_code] = {
+                'total_feed_per_day': 0,
+                'total_accumulated_feed': 0
+            }
+        site_feed_summary[site_id][feed_code]['total_feed_per_day'] += pond['feed_per_day'] if isinstance(pond['feed_per_day'], (int, float)) else 0
+        site_feed_summary[site_id][feed_code]['total_accumulated_feed'] += pond['accumulated_feed'] if isinstance(pond['accumulated_feed'], (int, float)) else 0
+
         pond['creation_date'] = pond['creation_date'].strftime('%Y-%m-%d') if pond['creation_date'] else 'N/A'
         site_data[site_id]['ponds'].append(pond)
     
@@ -427,10 +440,8 @@ def summary():
                            total_ponds=overall['total_ponds'], 
                            total_area=overall['total_area'], 
                            total_prawn_count=overall['total_prawn_count'],
-                           sites=list(site_data.values()))
-
-
-
+                           sites=list(site_data.values()),
+                           site_feed_summary=site_feed_summary)
 
 
 if __name__ == '__main__':
