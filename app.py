@@ -65,7 +65,7 @@ def init_db():
             current_day = 1  # Start with day 1
             currentdate = datetime.datetime.now().date()
             cursor.execute('INSERT INTO currentdate (current_day, currentdate) VALUES (%s, %s)', (current_day, currentdate))
-        
+
         mysql.connection.commit()
         cursor.close()
 
@@ -95,17 +95,17 @@ for index, row in df.iterrows():
 def edit_pond(pond_id):
     if 'loggedin' not in session:
         return redirect(url_for('login'))
-    
+
     cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-    
+
     if request.method == 'POST':
         # Fetch updated details from the form
         new_prawn_count = int(request.form['prawn_count'])
-        
+
         # Get current details of the pond to keep creation date and current day unchanged
         cursor.execute('SELECT prawn_count, accumulated_feed, current_day FROM ponds WHERE id = %s', (pond_id,))
         pond = cursor.fetchone()
-        
+
         if not pond:
             flash('Pond not found!', 'danger')
             return redirect(url_for('summary'))
@@ -115,26 +115,26 @@ def edit_pond(pond_id):
         current_day = pond['current_day']
 
         # Update pond details in the database without changing creation date or current day
-        cursor.execute('UPDATE ponds SET prawn_count = %s WHERE id = %s', 
+        cursor.execute('UPDATE ponds SET prawn_count = %s WHERE id = %s',
                        (new_prawn_count, pond_id))
 
         # Recalculate accumulated feed
         new_accumulated_feed = calculate_accumulated_feed(new_prawn_count, current_day)
 
         # Update accumulated feed in the database
-        cursor.execute('UPDATE ponds SET accumulated_feed = %s WHERE id = %s', 
+        cursor.execute('UPDATE ponds SET accumulated_feed = %s WHERE id = %s',
                        (new_accumulated_feed, pond_id))
-        
+
         mysql.connection.commit()
-        
+
         cursor.close()
         flash('Pond updated successfully!', 'success')
         return redirect(url_for('summary'))
-    
+
     # Fetch existing pond details
     cursor.execute('SELECT * FROM ponds WHERE id = %s', (pond_id,))
     pond = cursor.fetchone()
-    
+
     cursor.close()
     return render_template('edit_pond.html', pond=pond)
 
@@ -147,7 +147,7 @@ def calculate_feed_details(prawn_count, day):
             "accumulated_feed": 0,
             "feed_code": "feeds cultivated"
         }
-    
+
     feed_info = next((item for item in feed_data if item["day"] == day), None)
     if not feed_info:
         return None
@@ -174,9 +174,9 @@ def calculate_accumulated_feed(prawn_count, current_day):
 def download_feed_sheet():
     if 'loggedin' not in session:
         return redirect(url_for('login'))
-    
+
     cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-    
+
     # Fetch site and pond details
     cursor.execute('''
         SELECT sites.id as site_id, sites.name as site_name, sites.location, ponds.id as pond_id, ponds.area, ponds.prawn_count, ponds.creation_date
@@ -185,14 +185,14 @@ def download_feed_sheet():
         WHERE sites.user_id = %s
     ''', (session['id'],))
     ponds = cursor.fetchall()
-    
+
     cursor.close()
-    
+
     feed_sheets = []
-    
+
     for pond in ponds:
         pond_feed_data = []
-        
+
         for day in range(1, 121):
             feed_details = calculate_feed_details(pond['prawn_count'], day)
             if feed_details is None:
@@ -209,23 +209,23 @@ def download_feed_sheet():
                 'Accumulated Feed (kg)': feed_details['accumulated_feed'],
                 'Feed Code': feed_details['feed_code']
             })
-        
+
         pond_df = pd.DataFrame(pond_feed_data)
         feed_sheets.append({
             'site_name': pond['site_name'],
             'pond_id': pond['pond_id'],
             'pond_data': pond_df
         })
-    
+
     # Create a Pandas Excel writer using an in-memory buffer
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
         for sheet in feed_sheets:
             sheet_name = f'{sheet["site_name"]}-{sheet["pond_id"]}'
             sheet['pond_data'].to_excel(writer, sheet_name=sheet_name, index=False)
-    
+
     buffer.seek(0)
-    
+
     return send_file(buffer, as_attachment=True, download_name='feed_sheet.xlsx', mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 @app.route('/')
@@ -241,7 +241,7 @@ def login():
         cursor.execute('SELECT * FROM users WHERE username = %s', (username,))
         user = cursor.fetchone()
         cursor.close()
-        
+
         if user and bcrypt.check_password_hash(user['password'], password):
             session['loggedin'] = True
             session['id'] = user['id']
@@ -303,48 +303,46 @@ def site_info(site_num):
 def pond_info(site_num, pond_num):
     if 'loggedin' not in session:
         return redirect(url_for('login'))
-    
+
     cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-    
+
     if request.method == 'POST':
         area = float(request.form['area'])
         prawn_count = int(request.form['prawn_count'])
         site_id = session[f'site_id_{site_num}']
-        
+
         # Use the current date as the creation date for the new pond
         creation_date = datetime.datetime.now().date()
-        
+
         # Calculate the current day for this pond (will always be 1 upon creation)
         current_day = 1
-        
+
         # Insert basic pond data into the database
         cursor.execute('''
-            INSERT INTO ponds (site_id, area, prawn_count, creation_date, current_day) 
+            INSERT INTO ponds (site_id, area, prawn_count, creation_date, current_day)
             VALUES (%s, %s, %s, %s, %s)
         ''', (site_id, area, prawn_count, creation_date, current_day))
         mysql.connection.commit()
-        
+
         cursor.close()
-        
+
         if pond_num < session[f'num_ponds_{site_num}']:
             return redirect(url_for('pond_info', site_num=site_num, pond_num=pond_num + 1))
         elif site_num < session['num_sites']:
             return redirect(url_for('site_info', site_num=site_num + 1))
         else:
             return redirect(url_for('summary'))
-    
+
     # Fetch pond details from the database
     cursor.execute('SELECT area, prawn_count, creation_date, current_day FROM ponds WHERE site_id = %s', (session[f'site_id_{site_num}'],))
     pond_details = cursor.fetchall()
-    
+
     cursor.close()
-    
-    return render_template('pond_info.html', 
-                           site_num=site_num, 
+
+    return render_template('pond_info.html',
+                           site_num=site_num,
                            pond_num=pond_num,
                            pond_details=pond_details)
-
-
 
 @app.route('/summary')
 def summary():
@@ -352,16 +350,16 @@ def summary():
         return redirect(url_for('login'))
 
     cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-    
+
     # Fetch user details
     cursor.execute('SELECT username, mobile FROM users WHERE id = %s', (session['id'],))
     user = cursor.fetchone()
 
     # Fetch overall summary
     cursor.execute('''
-        SELECT COUNT(*) as total_ponds, SUM(ponds.area) as total_area, SUM(ponds.prawn_count) as total_prawn_count 
-        FROM ponds 
-        JOIN sites ON ponds.site_id = sites.id 
+        SELECT COUNT(*) as total_ponds, SUM(ponds.area) as total_area, SUM(ponds.prawn_count) as total_prawn_count
+        FROM ponds
+        JOIN sites ON ponds.site_id = sites.id
         WHERE sites.user_id = %s
     ''', (session['id'],))
     overall = cursor.fetchone()
@@ -374,13 +372,13 @@ def summary():
         WHERE sites.user_id = %s
     ''', (session['id'],))
     ponds = cursor.fetchall()
-    
+
     cursor.close()
-    
+
     site_data = {}
     site_feed_summary = {}
     today_date = datetime.datetime.now().date()
-    
+
     for pond in ponds:
         site_id = pond['site_id']
         if site_id not in site_data:
@@ -419,7 +417,7 @@ def summary():
                 'feed_code': 'N/A',
                 'current_day': 'N/A'
             })
-        
+
         # Add feed details to the site-specific summary
         feed_code = pond['feed_code']
         if feed_code not in site_feed_summary[site_id]:
@@ -432,13 +430,13 @@ def summary():
 
         pond['creation_date'] = pond['creation_date'].strftime('%Y-%m-%d') if pond['creation_date'] else 'N/A'
         site_data[site_id]['ponds'].append(pond)
-    
-    return render_template('summary.html', 
-                           username=user['username'], 
-                           mobile=user['mobile'], 
+
+    return render_template('summary.html',
+                           username=user['username'],
+                           mobile=user['mobile'],
                            current_day='Varies',  # Each pond has its own current day
-                           total_ponds=overall['total_ponds'], 
-                           total_area=overall['total_area'], 
+                           total_ponds=overall['total_ponds'],
+                           total_area=overall['total_area'],
                            total_prawn_count=overall['total_prawn_count'],
                            sites=list(site_data.values()),
                            site_feed_summary=site_feed_summary)
@@ -446,7 +444,7 @@ def summary():
 @app.route('/admin')
 def admin():
     cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-    
+
     # Fetch total number of users
     cursor.execute('SELECT COUNT(*) as total_users FROM users')
     total_users = cursor.fetchone()['total_users']
@@ -475,7 +473,7 @@ def admin():
 
     # Fetch user-specific details including total feed per day
     cursor.execute('''
-        SELECT users.id, users.username, COUNT(sites.id) as site_count, COUNT(ponds.id) as pond_count, 
+        SELECT users.id, users.username, COUNT(sites.id) as site_count, COUNT(ponds.id) as pond_count,
                SUM(ponds.prawn_count) as total_prawn_count, COALESCE(SUM(ponds.feed_per_day), 0) as total_feed_per_day
         FROM users
         LEFT JOIN sites ON users.id = sites.user_id
@@ -483,30 +481,30 @@ def admin():
         GROUP BY users.id
     ''')
     user_details = cursor.fetchall()
-    
+
     cursor.close()
 
-    return render_template('admin_dashboard.html', 
-                           total_users=total_users, 
+    return render_template('admin_dashboard.html',
+                           total_users=total_users,
                            total_sites=total_sites,
-                           total_ponds=total_ponds, 
+                           total_ponds=total_ponds,
                            total_prawn_count=total_prawn_count,
                            total_feed_per_day=total_feed_per_day,
                            feed_summary=feed_summary,
                            user_details=user_details)
 
 
-@app.route('/admin/user/<int:user_id>')
+@app.route('/admin/user/<int:user_id>', methods=['GET', 'POST'])
 def user_details(user_id):
     cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-    
+
     # Fetch user details
     cursor.execute('SELECT username FROM users WHERE id = %s', (user_id,))
     user = cursor.fetchone()
-    
+
     # Fetch sites and ponds details for the user
     cursor.execute('''
-        SELECT sites.id as site_id, sites.name as site_name, sites.location, 
+        SELECT sites.id as site_id, sites.name as site_name, sites.location,
                ponds.id as pond_id, ponds.area, ponds.prawn_count, ponds.creation_date
         FROM sites
         LEFT JOIN ponds ON sites.id = ponds.site_id
@@ -518,7 +516,8 @@ def user_details(user_id):
 
     site_data = {}
     today_date = datetime.datetime.now().date()
-    
+    custom_days = request.form.get('custom_days', 7, type=int)
+
     for pond in ponds:
         site_id = pond['site_id']
         if site_id not in site_data:
@@ -559,24 +558,29 @@ def user_details(user_id):
                 'current_day': 0
             })
 
-        # Add feed details to the site-specific summary
-        site_data[site_id]['total_feed_per_day'] += pond['feed_per_day']
+        # Calculate feed for next custom_days days
+        for day in range(current_day, current_day + custom_days):
+            feed_details = calculate_feed_details(pond['prawn_count'], day)
+            feed_code = feed_details['feed_code']
+            feed_per_day = feed_details['feed_per_day']
 
-        feed_code = pond['feed_code']
-        if feed_code not in site_data[site_id]['site_feed_summary']:
-            site_data[site_id]['site_feed_summary'][feed_code] = {
-                'total_feed_per_day': 0,
-                'total_accumulated_feed': 0
-            }
-        site_data[site_id]['site_feed_summary'][feed_code]['total_feed_per_day'] += pond['feed_per_day']
-        site_data[site_id]['site_feed_summary'][feed_code]['total_accumulated_feed'] += pond['accumulated_feed']
+            if feed_code not in site_data[site_id]['site_feed_summary']:
+                site_data[site_id]['site_feed_summary'][feed_code] = {
+                    'total_feed_per_day': 0,
+                    'total_accumulated_feed': 0,
+                    'next_days_feed': 0
+                }
+            site_data[site_id]['site_feed_summary'][feed_code]['total_feed_per_day'] += feed_per_day
+            site_data[site_id]['site_feed_summary'][feed_code]['total_accumulated_feed'] += feed_details['accumulated_feed']
+            site_data[site_id]['site_feed_summary'][feed_code]['next_days_feed'] += feed_per_day
 
         pond['creation_date'] = pond['creation_date'].strftime('%Y-%m-%d') if pond['creation_date'] else 'N/A'
         site_data[site_id]['ponds'].append(pond)
 
-    return render_template('user_details.html', 
-                           user=user, 
-                           sites=list(site_data.values()))
+    return render_template('user_details.html',
+                           user=user,
+                           sites=list(site_data.values()),
+                           custom_days=custom_days)
 
 
 if __name__ == '__main__':
