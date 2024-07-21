@@ -498,7 +498,6 @@ def admin():
 
 @app.route('/admin/user/<int:user_id>')
 def user_details(user_id):
-
     cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
     
     # Fetch user details
@@ -518,7 +517,6 @@ def user_details(user_id):
     cursor.close()
 
     site_data = {}
-    site_feed_summary = {}
     today_date = datetime.datetime.now().date()
     
     for pond in ponds:
@@ -531,11 +529,8 @@ def user_details(user_id):
                 'total_area': 0,
                 'total_prawn_count': 0,
                 'total_feed_per_day': 0,
-                'ponds': []
-            }
-            site_feed_summary[site_id] = {
-                'site_name': pond['site_name'],
-                'total_feed_per_day': 0,
+                'ponds': [],
+                'site_feed_summary': {}
             }
 
         site_data[site_id]['total_area'] += pond['area']
@@ -566,14 +561,22 @@ def user_details(user_id):
 
         # Add feed details to the site-specific summary
         site_data[site_id]['total_feed_per_day'] += pond['feed_per_day']
-        site_feed_summary[site_id]['total_feed_per_day'] += pond['feed_per_day']
+
+        feed_code = pond['feed_code']
+        if feed_code not in site_data[site_id]['site_feed_summary']:
+            site_data[site_id]['site_feed_summary'][feed_code] = {
+                'total_feed_per_day': 0,
+                'total_accumulated_feed': 0
+            }
+        site_data[site_id]['site_feed_summary'][feed_code]['total_feed_per_day'] += pond['feed_per_day']
+        site_data[site_id]['site_feed_summary'][feed_code]['total_accumulated_feed'] += pond['accumulated_feed']
 
         pond['creation_date'] = pond['creation_date'].strftime('%Y-%m-%d') if pond['creation_date'] else 'N/A'
         site_data[site_id]['ponds'].append(pond)
 
     return render_template('user_details.html', 
                            user=user, 
-                           site_feed_summary=site_feed_summary.values())
+                           sites=list(site_data.values()))
 
 
 if __name__ == '__main__':

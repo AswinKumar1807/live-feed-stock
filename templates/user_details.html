@@ -60,24 +60,63 @@
             <h1 class="display-4">{{ user.username }}'s Feed Summary</h1>
         </div>
 
+        {% for site in sites %}
         <div class="card mb-4">
             <div class="card-header">
-                Feed Summary Per Site
+                <h3>Site: {{ site.name }} ({{ site.location }})</h3>
             </div>
             <div class="card-body">
+                <p><strong>Total Area:</strong> {{ site.total_area }} hectare </p>
+                <p><strong>Total Prawn Count:</strong> {{ site.total_prawn_count }}</p>
+                <h4>Ponds</h4>
                 <div class="table-responsive">
-                    <table class="table table-bordered">
+                    <table class="table table-bordered table-hover">
                         <thead class="thead-light">
                             <tr>
-                                <th>Site Name</th>
-                                <th>Total Feed Per Day (kg)</th>
+                                <th>Pond ID</th>
+                                <th>Area</th>
+                                <th>Prawn Count</th>
+                                <th>Creation Date</th>
+                                <th>Current Day</th>
+                                <th>Feed Per Day (kg)</th>
+                                <th>Feed Increase Per Day (kg)</th>
+                                <th>Accumulated Feed (kg)</th>
+                                <th>Feed Code</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {% for summary in site_feed_summary %}
+                            {% for pond in site.ponds %}
                             <tr>
-                                <td>{{ summary.site_name }}</td>
-                                <td>{{ summary.total_feed_per_day | round(2) }}</td>
+                                <td>{{ site.name }}-{{ pond.pond_id }}</td>
+                                <td>{{ pond.area | round(2) }}</td>
+                                <td>{{ pond.prawn_count }}</td>
+                                <td>{{ pond.creation_date }}</td>
+                                <td>{{ pond.current_day }}</td>
+                                <td>{{ pond.feed_per_day }}</td>
+                                <td>{{ pond.feed_increase_per_day }}</td>
+                                <td>{{ pond.accumulated_feed }}</td>
+                                <td>{{ pond.feed_code }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <h5>Site Feed Summary</h5>
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover">
+                        <thead class="thead-light">
+                            <tr>
+                                <th>Feed Code</th>
+                                <th>Total Feed Per Day (kg)</th>
+                                <th>Total Accumulated Feed (kg)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for feed_code, summary in site.site_feed_summary.items() %}
+                            <tr>
+                                <td>{{ feed_code }}</td>
+                                <td>{{ summary.total_feed_per_day }}</td>
+                                <td>{{ summary.total_accumulated_feed }}</td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -85,6 +124,7 @@
                 </div>
             </div>
         </div>
+        {% endfor %}
     </div>
 
     <footer class="footer mt-5 p-3">
