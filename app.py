@@ -248,7 +248,7 @@ def login():
             session['username'] = user['username']
             return redirect(url_for('summary'))
         else:
-            flash('Invalid username or password!', 'danger')
+            flash('Invalid username or password! Please contact Admin for recovery', 'danger')
     return render_template('login.html')
 
 @app.route('/signup', methods=['GET', 'POST'])
@@ -263,6 +263,20 @@ def signup():
         cursor.close()
         flash('You have successfully registered! Please login.', 'success')
         return redirect(url_for('login'))
+    return render_template('signup.html')
+
+@app.route('/signupadmin', methods=['GET', 'POST'])
+def signupadmin():
+    if request.method == 'POST':
+        username = request.form['username']
+        mobile = request.form['mobile']
+        password = bcrypt.generate_password_hash(request.form['password']).decode('utf-8')
+        cursor = mysql.connection.cursor()
+        cursor.execute('INSERT INTO users (username, mobile, password) VALUES (%s, %s, %s)', (username, mobile, password))
+        mysql.connection.commit()
+        cursor.close()
+        flash('You have successfully registered! Please login.', 'success')
+        return redirect(url_for('admin'))
     return render_template('signup.html')
 
 @app.route('/logout')
@@ -581,6 +595,38 @@ def user_details(user_id):
                            user=user,
                            sites=list(site_data.values()),
                            custom_days=custom_days)
+
+@app.route('/admin/delete_user/<int:user_id>', methods=['POST'])
+def delete_user(user_id):
+    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+
+    # Delete related ponds
+    cursor.execute('DELETE FROM ponds WHERE site_id IN (SELECT id FROM sites WHERE user_id = %s)', (user_id,))
+
+    # Delete related sites
+    cursor.execute('DELETE FROM sites WHERE user_id = %s', (user_id,))
+
+    # Delete the user
+    cursor.execute('DELETE FROM users WHERE id = %s', (user_id,))
+
+    mysql.connection.commit()
+    cursor.close()
+
+    return redirect(url_for('admin'))
+
+@app.route('/reset_password/<int:user_id>', methods=['POST'])
+def reset_password(user_id):
+    new_password = request.form.get('new_password')
+    if new_password:
+        hashed_password = bcrypt.generate_password_hash(new_password).decode('utf-8')
+        cursor = mysql.connection.cursor()
+        cursor.execute('UPDATE users SET password = %s WHERE id = %s', (hashed_password, user_id))
+        mysql.connection.commit()
+        cursor.close()
+        flash('Password has been reset successfully.', 'success')
+    else:
+        flash('Password reset was cancelled.', 'danger')
+    return redirect(url_for('admin'))
 
 
 if __name__ == '__main__':
