@@ -115,6 +115,8 @@
             <div class="card-body">
                 <p><strong>Total Area:</strong> {{ site.total_area }} hectare </p>
                 <p><strong>Total Prawn Count:</strong> {{ site.total_prawn_count }}</p>
+                <p><strong>Supervisor Name:</strong> {{ site.supervisor_name }}</p>
+                <p><strong>Supervisor Contact:</strong> {{ site.supervisor_contact }}</p>
                 <h4>Ponds</h4>
                 <div class="table-responsive">
                     <div class="table-responsive">
@@ -169,7 +171,6 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {% for site in sites %}
                                 {% for feed_code, summary in site_feed_summary[site.id].items() %}
                                 <tr>
                                     <td>{{ feed_code }}</td>
@@ -177,7 +178,6 @@
                                     <td>{{ summary.total_accumulated_feed | round(2) }}</td>
                                 </tr>
                                 {% endfor %}
-                            {% endfor %}
                         </tbody>
                     </table>
                 </div>

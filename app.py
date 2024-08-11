@@ -33,6 +33,8 @@ def init_db():
                 user_id INT,
                 name VARCHAR(100) NOT NULL,
                 location VARCHAR(100) NOT NULL,
+                supervisor_name VARCHAR(100) NOT NULL,
+                supervisor_contact VARCHAR(15) NOT NULL,
                 FOREIGN KEY (user_id) REFERENCES users(id)
             )
         ''')
@@ -306,11 +308,18 @@ def logout():
 def profile():
     if 'loggedin' not in session:
         return redirect(url_for('login'))
+
     if request.method == 'POST':
         num_sites = int(request.form['num_sites'])
+        supervisor_name = request.form['supervisor_name']
+        supervisor_contact = request.form['supervisor_contact']
         session['num_sites'] = num_sites
+        session['supervisor_name'] = supervisor_name
+        session['supervisor_contact'] = supervisor_contact
         return redirect(url_for('site_info', site_num=1))
+
     return render_template('profile.html')
+
 
 @app.route('/site_info/<int:site_num>', methods=['GET', 'POST'])
 def site_info(site_num):
@@ -320,14 +329,20 @@ def site_info(site_num):
         site_name = request.form['site_name']
         location = request.form['location']
         num_ponds = int(request.form['num_ponds'])
+        supervisor_name = session.get('supervisor_name')
+        supervisor_contact = session.get('supervisor_contact')
         cursor = mysql.connection.cursor()
-        cursor.execute('INSERT INTO sites (user_id, name, location) VALUES (%s, %s, %s)', (session['id'], site_name, location))
+        cursor.execute('''
+            INSERT INTO sites (user_id, name, location, supervisor_name, supervisor_contact)
+            VALUES (%s, %s, %s, %s, %s)
+        ''', (session['id'], site_name, location, supervisor_name, supervisor_contact))
         site_id = cursor.lastrowid
         mysql.connection.commit()
         session[f'site_id_{site_num}'] = site_id
         session[f'num_ponds_{site_num}'] = num_ponds
         return redirect(url_for('pond_info', site_num=site_num, pond_num=1))
     return render_template('site_info.html', site_num=site_num)
+
 
 @app.route('/pond_info/<int:site_num>/<int:pond_num>', methods=['GET', 'POST'])
 def pond_info(site_num, pond_num):
@@ -398,7 +413,8 @@ def summary():
 
     # Fetch site and pond details
     cursor.execute('''
-        SELECT sites.id as site_id, sites.name, sites.location, ponds.id as pond_id, ponds.area, ponds.prawn_count, ponds.creation_date
+        SELECT sites.id as site_id, sites.name, sites.location, sites.supervisor_name, sites.supervisor_contact,
+               ponds.id as pond_id, ponds.area, ponds.prawn_count, ponds.creation_date
         FROM sites
         JOIN ponds ON sites.id = ponds.site_id
         WHERE sites.user_id = %s
@@ -426,6 +442,8 @@ def summary():
                 'id': site_id,
                 'name': pond['name'],
                 'location': pond['location'],
+                'supervisor_name': pond['supervisor_name'],  # Add supervisor name
+                'supervisor_contact': pond['supervisor_contact'],
                 'total_area': 0,
                 'total_prawn_count': 0,
                 'ponds': []
@@ -556,7 +574,7 @@ def user_details(user_id):
 
     # Fetch sites and ponds details for the user
     cursor.execute('''
-        SELECT sites.id as site_id, sites.name as site_name, sites.location,
+        SELECT sites.id as site_id, sites.name as site_name, sites.location,sites.supervisor_name, sites.supervisor_contact,
                ponds.id as pond_id, ponds.area, ponds.prawn_count, ponds.creation_date
         FROM sites
         LEFT JOIN ponds ON sites.id = ponds.site_id
@@ -577,6 +595,8 @@ def user_details(user_id):
                 'id': site_id,
                 'name': pond['site_name'],
                 'location': pond['location'],
+                'supervisor_name': pond['supervisor_name'],  # Add supervisor name
+                'supervisor_contact': pond['supervisor_contact'],
                 'total_area': 0,
                 'total_prawn_count': 0,
                 'total_feed_per_day': 0,

@@ -68,12 +68,19 @@
         </div>
 
         <div class="form-container">
-            <form method="POST">
+            <form id="feed-form" method="POST">
                 <div class="form-group">
                     <label for="custom_days">Enter number of days:</label>
                     <input type="number" class="form-control" id="custom_days" name="custom_days" value="{{ custom_days }}" min="1" max="120">
                 </div>
-                <!-- Add an empty line here -->
+                <div class="form-group">
+                    <label for="unit">Select unit:</label>
+                    <select class="form-control" id="unit" name="unit">
+                        <option value="kg" {% if selected_unit == 'kg' or selected_unit is none %}selected{% endif %}>kg</option>
+                        <option value="bag" {% if selected_unit == 'bag' %}selected{% endif %}>Bag</option>
+                        <option value="metric" {% if selected_unit == 'metric' %}selected{% endif %}>Metric</option>
+                    </select>
+                </div>
                 <div class="mt-4">
                     <button type="submit" class="btn btn-primary">Calculate Feed Supply</button>
                 </div>
@@ -86,8 +93,10 @@
                 <h3>Site: {{ site.name }} ({{ site.location }})</h3>
             </div>
             <div class="card-body">
-                <p><strong>Total Area:</strong> {{ site.total_area | round(2) }} hectare </p>
+                <p><strong>Total Area:</strong> {{ site.total_area | round(2) }} hectare</p>
                 <p><strong>Total Prawn Count:</strong> {{ site.total_prawn_count | round(2) }}</p>
+                <p><strong>Supervisor Name:</strong> {{ site.supervisor_name }}</p>
+                <p><strong>Supervisor Contact:</strong> {{ site.supervisor_contact }}</p>
                 <h4>Ponds</h4>
                 <div class="table-responsive">
                     <table class="table table-bordered table-hover">
@@ -98,9 +107,9 @@
                                 <th>Prawn Count</th>
                                 <th>Creation Date</th>
                                 <th>Current Day</th>
-                                <th>Feed Per Day (kg)</th>
-                                <th>Feed Increase Per Day (kg)</th>
-                                <th>Accumulated Feed (kg)</th>
+                                <th id="feed-per-day-header">Feed Per Day ({{ selected_unit if selected_unit else 'kg' }})</th>
+                                <th id="feed-increase-per-day-header">Feed Increase Per Day ({{ selected_unit if selected_unit else 'kg' }})</th>
+                                <th id="accumulated-feed-header">Accumulated Feed ({{ selected_unit if selected_unit else 'kg' }})</th>
                                 <th>Feed Code</th>
                             </tr>
                         </thead>
@@ -112,9 +121,9 @@
                                 <td>{{ pond.prawn_count | round(2) }}</td>
                                 <td>{{ pond.creation_date }}</td>
                                 <td>{{ pond.current_day }}</td>
-                                <td>{{ pond.feed_per_day | round(2) }}</td>
-                                <td>{{ pond.feed_increase_per_day | round(2) }}</td>
-                                <td>{{ pond.accumulated_feed | round(2) }}</td>
+                                <td class="feed-per-day" data-original="{{ pond.feed_per_day | round(2) }}">{{ pond.feed_per_day | round(2) }}</td>
+                                <td class="feed-increase-per-day" data-original="{{ pond.feed_increase_per_day | round(2) }}">{{ pond.feed_increase_per_day | round(2) }}</td>
+                                <td class="accumulated-feed" data-original="{{ pond.accumulated_feed | round(2) }}">{{ pond.accumulated_feed | round(2) }}</td>
                                 <td>{{ pond.feed_code }}</td>
                             </tr>
                             {% endfor %}
@@ -128,14 +137,14 @@
                         <thead class="thead-light">
                             <tr>
                                 <th>Feed Code</th>
-                                <th>Next {{ custom_days }} Days Feed (kg)</th>
+                                <th id="next-days-feed-header">Next {{ custom_days }} Days Feed ({{ selected_unit if selected_unit else 'kg' }})</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for feed_code, summary in site.site_feed_summary.items() %}
                             <tr>
                                 <td>{{ feed_code }}</td>
-                                <td>{{ summary.next_days_feed | round(2) }}</td>
+                                <td class="next-days-feed" data-original="{{ summary.next_days_feed | round(2) }}">{{ summary.next_days_feed | round(2) }}</td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -158,5 +167,55 @@
 
     <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function convertFeedValues(unit) {
+            const conversionFactors = {
+                'kg': 1,
+                'bag': 1 / 25,
+                'metric': 1 / 100
+            };
+            const factor = conversionFactors[unit];
+
+            $('.feed-per-day').each(function() {
+                const originalValue = parseFloat($(this).data('original'));
+                $(this).text((originalValue * factor).toFixed(2));
+            });
+
+            $('.feed-increase-per-day').each(function() {
+                const originalValue = parseFloat($(this).data('original'));
+                $(this).text((originalValue * factor).toFixed(2));
+            });
+
+            $('.accumulated-feed').each(function() {
+                const originalValue = parseFloat($(this).data('original'));
+                $(this).text((originalValue * factor).toFixed(2));
+            });
+
+            $('.next-days-feed').each(function() {
+                const originalValue = parseFloat($(this).data('original'));
+                $(this).text((originalValue * factor).toFixed(2));
+            });
+        }
+
+        function updateTableHeaders(unit) {
+            $('#feed-per-day-header').text('Feed Per Day (' + unit + ')');
+            $('#feed-increase-per-day-header').text('Feed Increase Per Day (' + unit + ')');
+            $('#accumulated-feed-header').text('Accumulated Feed (' + unit + ')');
+            $('#next-days-feed-header').text('Next {{ custom_days }} Days Feed (' + unit + ')');
+        }
+
+        $(document).ready(function() {
+            const defaultUnit = 'kg';
+            $('#unit').val(defaultUnit);
+            updateTableHeaders(defaultUnit);
+            convertFeedValues(defaultUnit);
+
+            $('#unit').change(function() {
+                const selectedUnit = $(this).val();
+                updateTableHeaders(selectedUnit);
+                convertFeedValues(selectedUnit);
+            });
+        });
+    </script>
 </body>
 </html>
