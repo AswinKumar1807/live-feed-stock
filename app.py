@@ -202,11 +202,27 @@ def download_feed_sheet():
                     'accumulated_feed': 'N/A',
                     'feed_code': 'N/A'
                 }
+
+            # Calculate the additional columns
+            feed_per_day_bag = (feed_details['feed_per_day'] / 25) if feed_details['feed_per_day'] != 'N/A' else 'N/A'
+            feed_increase_per_day_bag = (feed_details['feed_increase_per_day'] / 25) if feed_details['feed_increase_per_day'] != 'N/A' else 'N/A'
+            accumulated_feed_bag = (feed_details['accumulated_feed'] / 25) if feed_details['accumulated_feed'] != 'N/A' else 'N/A'
+
+            feed_per_day_metric = (feed_details['feed_per_day'] / 100) if feed_details['feed_per_day'] != 'N/A' else 'N/A'
+            feed_increase_per_day_metric = (feed_details['feed_increase_per_day'] / 100) if feed_details['feed_increase_per_day'] != 'N/A' else 'N/A'
+            accumulated_feed_metric = (feed_details['accumulated_feed'] / 100) if feed_details['accumulated_feed'] != 'N/A' else 'N/A'
+
             pond_feed_data.append({
                 'Day': day,
                 'Feed Per Day (kg)': feed_details['feed_per_day'],
                 'Feed Increase Per Day (kg)': feed_details['feed_increase_per_day'],
                 'Accumulated Feed (kg)': feed_details['accumulated_feed'],
+                'Feed Per Day (in bag)': feed_per_day_bag,
+                'Feed Increase Per Day (in bag)': feed_increase_per_day_bag,
+                'Accumulated Feed (in bag)': accumulated_feed_bag,
+                'Feed Per Day (in metric)': feed_per_day_metric,
+                'Feed Increase Per Day (in metric)': feed_increase_per_day_metric,
+                'Accumulated Feed (in metric)': accumulated_feed_metric,
                 'Feed Code': feed_details['feed_code']
             })
 
@@ -358,10 +374,12 @@ def pond_info(site_num, pond_num):
                            pond_num=pond_num,
                            pond_details=pond_details)
 
-@app.route('/summary')
+@app.route('/summary', methods=['GET', 'POST'])
 def summary():
     if 'loggedin' not in session:
         return redirect(url_for('login'))
+
+    unit = request.form.get('unit', 'kg')  # Get the selected unit, default to 'kg'
 
     cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
@@ -392,6 +410,14 @@ def summary():
     site_data = {}
     site_feed_summary = {}
     today_date = datetime.datetime.now().date()
+
+    def convert_feed_units(value, unit):
+        if isinstance(value, (int, float)):
+            if unit == 'bag':
+                return value / 25
+            elif unit == 'metric':
+                return value / 100
+        return value
 
     for pond in ponds:
         site_id = pond['site_id']
@@ -432,6 +458,11 @@ def summary():
                 'current_day': 'N/A'
             })
 
+        # Convert feed values to the selected unit
+        pond['feed_per_day'] = convert_feed_units(pond['feed_per_day'], unit)
+        pond['feed_increase_per_day'] = convert_feed_units(pond['feed_increase_per_day'], unit)
+        pond['accumulated_feed'] = convert_feed_units(pond['accumulated_feed'], unit)
+
         # Add feed details to the site-specific summary
         feed_code = pond['feed_code']
         if feed_code not in site_feed_summary[site_id]:
@@ -445,6 +476,12 @@ def summary():
         pond['creation_date'] = pond['creation_date'].strftime('%Y-%m-%d') if pond['creation_date'] else 'N/A'
         site_data[site_id]['ponds'].append(pond)
 
+    # Convert site feed summary totals based on the selected unit
+    for site_id in site_feed_summary:
+        for feed_code, summary in site_feed_summary[site_id].items():
+            summary['total_feed_per_day'] = convert_feed_units(summary['total_feed_per_day'], unit)
+            summary['total_accumulated_feed'] = convert_feed_units(summary['total_accumulated_feed'], unit)
+
     return render_template('summary.html',
                            username=user['username'],
                            mobile=user['mobile'],
@@ -453,7 +490,8 @@ def summary():
                            total_area=overall['total_area'],
                            total_prawn_count=overall['total_prawn_count'],
                            sites=list(site_data.values()),
-                           site_feed_summary=site_feed_summary)
+                           site_feed_summary=site_feed_summary,
+                           selected_unit=unit)
 
 @app.route('/admin')
 def admin():

@@ -96,6 +96,16 @@
                 </p>
             </div>
         </div>
+        <form method="POST" action="{{ url_for('summary') }}">
+            <div class="form-group">
+                <label for="unit">Select Unit:</label>
+                <select name="unit" id="unit" class="form-control" onchange="this.form.submit()">
+                    <option value="kg" {% if selected_unit == 'kg' %}selected{% endif %}>kg</option>
+                    <option value="bag" {% if selected_unit == 'bag' %}selected{% endif %}>bag</option>
+                    <option value="metric" {% if selected_unit == 'metric' %}selected{% endif %}>metric</option>
+                </select>
+            </div>
+        </form>
 
         {% for site in sites %}
         <div class="card mb-4">
@@ -107,6 +117,10 @@
                 <p><strong>Total Prawn Count:</strong> {{ site.total_prawn_count }}</p>
                 <h4>Ponds</h4>
                 <div class="table-responsive">
+                    <div class="table-responsive">
+
+
+                    <!-- Ponds table -->
                     <table class="table table-bordered table-hover">
                         <thead class="thead-light">
                             <tr>
@@ -115,9 +129,9 @@
                                 <th>Prawn Count</th>
                                 <th>Creation Date</th>
                                 <th>Current Day</th>
-                                <th>Feed Per Day (kg)</th>
-                                <th>Feed Increase Per Day (kg)</th>
-                                <th>Accumulated Feed (kg)</th>
+                                <th>Feed Per Day ({{ selected_unit }})</th>
+                                <th>Feed Increase Per Day ({{ selected_unit }})</th>
+                                <th>Accumulated Feed ({{ selected_unit }})</th>
                                 <th>Feed Code</th>
                                 <th>Actions</th>
                             </tr>
@@ -141,24 +155,28 @@
                             {% endfor %}
                         </tbody>
                     </table>
+
                 </div>
+
                 <h5>Site Feed Summary</h5>
                 <div class="table-responsive">
                     <table class="table table-bordered table-hover">
                         <thead class="thead-light">
                             <tr>
                                 <th>Feed Code</th>
-                                <th>Total Feed Per Day (kg)</th>
-                                <th>Total Accumulated Feed (kg)</th>
+                                <th>Total Feed Per Day ({{ selected_unit }})</th>
+                                <th>Total Accumulated Feed ({{ selected_unit }})</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {% for feed_code, summary in site_feed_summary[site.id].items() %}
-                            <tr>
-                                <td>{{ feed_code }}</td>
-                                <td>{{ summary.total_feed_per_day | round(2) }}</td>
-                                <td>{{ summary.total_accumulated_feed | round(2) }}</td>
-                            </tr>
+                            {% for site in sites %}
+                                {% for feed_code, summary in site_feed_summary[site.id].items() %}
+                                <tr>
+                                    <td>{{ feed_code }}</td>
+                                    <td>{{ summary.total_feed_per_day | round(2) }}</td>
+                                    <td>{{ summary.total_accumulated_feed | round(2) }}</td>
+                                </tr>
+                                {% endfor %}
                             {% endfor %}
                         </tbody>
                     </table>
