@@ -1,5 +1,5 @@
 import datetime
-from flask import Flask, render_template, request, redirect, url_for, session, flash
+from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 from flask_mysqldb import MySQL
 from flask_bcrypt import Bcrypt
 import MySQLdb.cursors
@@ -50,6 +50,7 @@ def init_db():
                 feed_code VARCHAR(100) NOT NULL,
                 creation_date DATE NOT NULL,
                 current_day INT NOT NULL,
+                harvested_finish BOOLEAN DEFAULT FALSE,
                 FOREIGN KEY (site_id) REFERENCES sites(id)
             )
         ''')
@@ -255,6 +256,9 @@ def login():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
+        if ((username == 'Admin') & (password == 'Admin@123')):
+            session['loggedin'] = True
+            return redirect(url_for('admin'))
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
         cursor.execute('SELECT * FROM users WHERE username = %s', (username,))
         user = cursor.fetchone()
@@ -414,7 +418,7 @@ def summary():
     # Fetch site and pond details
     cursor.execute('''
         SELECT sites.id as site_id, sites.name, sites.location, sites.supervisor_name, sites.supervisor_contact,
-               ponds.id as pond_id, ponds.area, ponds.prawn_count, ponds.creation_date
+               ponds.id as pond_id, ponds.area, ponds.prawn_count, ponds.creation_date, ponds.harvested_finish
         FROM sites
         JOIN ponds ON sites.id = ponds.site_id
         WHERE sites.user_id = %s
@@ -442,7 +446,7 @@ def summary():
                 'id': site_id,
                 'name': pond['name'],
                 'location': pond['location'],
-                'supervisor_name': pond['supervisor_name'],  # Add supervisor name
+                'supervisor_name': pond['supervisor_name'],
                 'supervisor_contact': pond['supervisor_contact'],
                 'total_area': 0,
                 'total_prawn_count': 0,
@@ -453,7 +457,6 @@ def summary():
         site_data[site_id]['total_area'] += pond['area']
         site_data[site_id]['total_prawn_count'] += pond['prawn_count']
 
-        # Calculate current_day for each pond based on its creation_date
         if pond['creation_date']:
             pond_creation_date = pond['creation_date']
             current_day = (today_date - pond_creation_date).days + 1
@@ -476,12 +479,10 @@ def summary():
                 'current_day': 'N/A'
             })
 
-        # Convert feed values to the selected unit
         pond['feed_per_day'] = convert_feed_units(pond['feed_per_day'], unit)
         pond['feed_increase_per_day'] = convert_feed_units(pond['feed_increase_per_day'], unit)
         pond['accumulated_feed'] = convert_feed_units(pond['accumulated_feed'], unit)
 
-        # Add feed details to the site-specific summary
         feed_code = pond['feed_code']
         if feed_code not in site_feed_summary[site_id]:
             site_feed_summary[site_id][feed_code] = {
@@ -492,9 +493,9 @@ def summary():
         site_feed_summary[site_id][feed_code]['total_accumulated_feed'] += pond['accumulated_feed'] if isinstance(pond['accumulated_feed'], (int, float)) else 0
 
         pond['creation_date'] = pond['creation_date'].strftime('%Y-%m-%d') if pond['creation_date'] else 'N/A'
+        pond['harvested_finish'] = pond['harvested_finish'] or False
         site_data[site_id]['ponds'].append(pond)
 
-    # Convert site feed summary totals based on the selected unit
     for site_id in site_feed_summary:
         for feed_code, summary in site_feed_summary[site_id].items():
             summary['total_feed_per_day'] = convert_feed_units(summary['total_feed_per_day'], unit)
@@ -503,7 +504,6 @@ def summary():
     return render_template('summary.html',
                            username=user['username'],
                            mobile=user['mobile'],
-                           current_day='Varies',  # Each pond has its own current day
                            total_ponds=overall['total_ponds'],
                            total_area=overall['total_area'],
                            total_prawn_count=overall['total_prawn_count'],
@@ -511,8 +511,38 @@ def summary():
                            site_feed_summary=site_feed_summary,
                            selected_unit=unit)
 
+@app.route('/harvested_finish/<int:pond_id>', methods=['POST'])
+def harvested_finish(pond_id):
+    if 'loggedin' not in session:
+        return jsonify({'success': False, 'message': 'User not logged in'})
+
+    cursor = mysql.connection.cursor()
+
+    # Update the harvested_finish status for the pond
+    try:
+        cursor.execute('''
+            UPDATE ponds
+            SET harvested_finish = TRUE
+            WHERE id = %s
+        ''', (pond_id,))
+        mysql.connection.commit()
+
+        # Check if the update was successful
+        if cursor.rowcount == 0:
+            return jsonify({'success': False, 'message': 'Pond not found or already harvested'})
+
+        return jsonify({'success': True, 'message': 'Pond status updated successfully'})
+    except Exception as e:
+        print(f"Error: {e}")
+        return jsonify({'success': False, 'message': 'Error updating pond status'})
+    finally:
+        cursor.close()
+
+
 @app.route('/admin')
 def admin():
+    if 'loggedin' not in session:
+        return redirect(url_for('login'))
     cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
     # Fetch total number of users
@@ -566,6 +596,8 @@ def admin():
 
 @app.route('/admin/user/<int:user_id>', methods=['GET', 'POST'])
 def user_details(user_id):
+    if 'loggedin' not in session:
+        return redirect(url_for('login'))
     cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
     # Fetch user details
