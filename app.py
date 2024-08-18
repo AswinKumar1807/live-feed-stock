@@ -15,10 +15,11 @@ app.config.from_object('config.Config')
 mysql = MySQL(app)
 bcrypt = Bcrypt(app)
 
-# Database initialization
 def init_db():
     with app.app_context():
         cursor = mysql.connection.cursor()
+
+         # Existing tables
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS users (
                 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -54,6 +55,28 @@ def init_db():
                 FOREIGN KEY (site_id) REFERENCES sites(id)
             )
         ''')
+
+        # Updated feed tracking related to sites and ponds
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS site_feed (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                site_id INT,
+                feed_code VARCHAR(100) NOT NULL,
+                quantity_in_kg FLOAT NOT NULL,
+                FOREIGN KEY (site_id) REFERENCES sites(id)
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS pond_feed (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                pond_id INT,
+                feed_code VARCHAR(100) NOT NULL,
+                quantity_in_kg FLOAT NOT NULL,
+                FOREIGN KEY (pond_id) REFERENCES ponds(id)
+            )
+        ''')
+
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS currentdate (
                 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -61,6 +84,8 @@ def init_db():
                 currentdate DATE NOT NULL
             )
         ''')
+
+        # Check if the current date entry exists
         cursor.execute('SELECT * FROM currentdate')
         row = cursor.fetchone()
         if not row:
@@ -71,7 +96,6 @@ def init_db():
 
         mysql.connection.commit()
         cursor.close()
-
 # Initialize the database
 init_db()
 
@@ -598,6 +622,7 @@ def admin():
 def user_details(user_id):
     if 'loggedin' not in session:
         return redirect(url_for('login'))
+
     cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
     # Fetch user details
@@ -606,13 +631,29 @@ def user_details(user_id):
 
     # Fetch sites and ponds details for the user
     cursor.execute('''
-        SELECT sites.id as site_id, sites.name as site_name, sites.location,sites.supervisor_name, sites.supervisor_contact,
+        SELECT sites.id as site_id, sites.name as site_name, sites.location, sites.supervisor_name, sites.supervisor_contact,
                ponds.id as pond_id, ponds.area, ponds.prawn_count, ponds.creation_date
         FROM sites
         LEFT JOIN ponds ON sites.id = ponds.site_id
         WHERE sites.user_id = %s
     ''', (user_id,))
     ponds = cursor.fetchall()
+
+    # Fetch feed supplied data for the user
+    cursor.execute('''
+        SELECT feed_code, quantity_in_kg
+        FROM feed_supplied
+        WHERE user_id = %s
+    ''', (user_id,))
+    feed_supplied = cursor.fetchall()
+
+    # Fetch consumed quantity data for each site and feed code
+    cursor.execute('''
+        SELECT site_id, feed_code, SUM(quantity_in_kg) as total_consumed
+        FROM site_feed
+        GROUP BY site_id, feed_code
+    ''')
+    consumed_quantities = cursor.fetchall()  # Ensure this query runs correctly
 
     cursor.close()
 
@@ -627,13 +668,14 @@ def user_details(user_id):
                 'id': site_id,
                 'name': pond['site_name'],
                 'location': pond['location'],
-                'supervisor_name': pond['supervisor_name'],  # Add supervisor name
+                'supervisor_name': pond['supervisor_name'],
                 'supervisor_contact': pond['supervisor_contact'],
                 'total_area': 0,
                 'total_prawn_count': 0,
                 'total_feed_per_day': 0,
                 'ponds': [],
-                'site_feed_summary': {}
+                'site_feed_summary': {},
+                'consumed_quantities': {}  # Initialize consumed_quantities for each site
             }
 
         site_data[site_id]['total_area'] += pond['area']
@@ -681,10 +723,22 @@ def user_details(user_id):
         pond['creation_date'] = pond['creation_date'].strftime('%Y-%m-%d') if pond['creation_date'] else 'N/A'
         site_data[site_id]['ponds'].append(pond)
 
+    # Update site_data with consumed quantities
+    for item in consumed_quantities:
+        site_id = item['site_id']
+        feed_code = item['feed_code']
+        total_consumed = item['total_consumed']
+        if site_id in site_data:
+            site_data[site_id]['consumed_quantities'][feed_code] = total_consumed
+
     return render_template('user_details.html',
                            user=user,
                            sites=list(site_data.values()),
-                           custom_days=custom_days)
+                           custom_days=custom_days,
+                           feed_supplied=feed_supplied)
+
+
+
 
 @app.route('/admin/delete_user/<int:user_id>', methods=['POST'])
 def delete_user(user_id):
@@ -717,6 +771,126 @@ def reset_password(user_id):
     else:
         flash('Password reset was cancelled.', 'danger')
     return redirect(url_for('admin'))
+
+@app.route('/admin/add_feed_supplied', methods=['POST'])
+def add_feed_supplied():
+    user_id = request.form.get('user_id')
+    feed_code = request.form.get('feed_code')
+    quantity_in_kg = request.form.get('quantity_in_kg')
+
+    if not user_id or not feed_code or not quantity_in_kg:
+        flash('All fields are required!', 'error')
+        return redirect(url_for('admin'))
+
+    try:
+        cursor = mysql.connection.cursor()
+        cursor.execute('''
+            INSERT INTO feed_supplied (user_id, feed_code, quantity_in_kg)
+            VALUES (%s, %s, %s)
+        ''', (user_id, feed_code, quantity_in_kg))
+
+        mysql.connection.commit()
+        cursor.close()
+        flash('Feed supplied successfully!', 'success')
+    except Exception as e:
+        flash(f'An error occurred: {str(e)}', 'error')
+        mysql.connection.rollback()
+    return redirect(url_for('admin'))
+
+@app.route('/user/add_consumed_quantity', methods=['POST'])
+def add_consumed_quantity():
+    site_id = request.form.get('site_id')
+    feed_code = request.form.get('feed_code')
+    quantity = float(request.form.get('quantity_consumed'))
+
+    cursor = mysql.connection.cursor()
+
+    try:
+        # Check if the site_id exists in the sites table
+        cursor.execute('SELECT id FROM sites WHERE id = %s', (site_id,))
+        site = cursor.fetchone()
+
+        if site is None:
+            return jsonify({"success": False, "message": f"The site with ID {site_id} does not exist."})
+
+        # Check if there's an existing entry for the same site_id and feed_code
+        cursor.execute('''
+            SELECT quantity_in_kg FROM site_feed WHERE site_id = %s AND feed_code = %s
+        ''', (site_id, feed_code))
+        existing_entry = cursor.fetchone()
+
+        if existing_entry:
+            # Update the existing entry
+            new_quantity = existing_entry[0] + quantity
+            cursor.execute('''
+                UPDATE site_feed SET quantity_in_kg = %s WHERE site_id = %s AND feed_code = %s
+            ''', (new_quantity, site_id, feed_code))
+        else:
+            # Insert a new entry
+            cursor.execute('''
+                INSERT INTO site_feed (site_id, feed_code, quantity_in_kg)
+                VALUES (%s, %s, %s)
+            ''', (site_id, feed_code, quantity))
+
+        mysql.connection.commit()
+        return jsonify({"success": True, "reload": True})
+    except Exception as e:
+        mysql.connection.rollback()
+        return jsonify({"success": False, "message": str(e)})
+    finally:
+        cursor.close()
+
+
+@app.route('/save-feed-supplied', methods=['POST'])
+def save_feed_supplied():
+    if not request.is_json:
+        return jsonify({"success": False, "error": "Invalid data format."})
+
+    data = request.get_json()
+    user_id = data.get('user_id')
+    feed_supplies = data.get('feed_supplies', [])
+
+    if not user_id or not feed_supplies:
+        return jsonify({"success": False, "error": "Invalid data."})
+
+    try:
+        with mysql.connection.cursor() as cursor:
+            for item in feed_supplies:
+                feed_code = item['feedCode']
+                quantity = item['quantity']
+
+                # Check if record exists
+                cursor.execute('''
+                    SELECT quantity_in_kg
+                    FROM feed_supplied
+                    WHERE user_id = %s AND feed_code = %s
+                ''', (user_id, feed_code))
+
+                existing_quantity = cursor.fetchone()
+
+                if existing_quantity:
+                    # Update existing record by adding new quantity
+                    new_quantity = existing_quantity[0] + quantity
+                    cursor.execute('''
+                        UPDATE feed_supplied
+                        SET quantity_in_kg = %s
+                        WHERE user_id = %s AND feed_code = %s
+                    ''', (new_quantity, user_id, feed_code))
+                else:
+                    # Insert new record
+                    cursor.execute('''
+                        INSERT INTO feed_supplied (user_id, feed_code, quantity_in_kg)
+                        VALUES (%s, %s, %s)
+                    ''', (user_id, feed_code, quantity))
+
+        mysql.connection.commit()
+        return jsonify({"success": True})
+    except Exception as e:
+        mysql.connection.rollback()
+        return jsonify({"success": False, "error": str(e)})
+
+
+
 
 
 if __name__ == '__main__':
