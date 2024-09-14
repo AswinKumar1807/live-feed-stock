@@ -423,11 +423,12 @@ def summary():
         return redirect(url_for('login'))
 
     unit = request.form.get('unit', 'kg')  # Get the selected unit, default to 'kg'
+    user_id = session['id']  # Ensure we have the user ID from session
 
     cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
     # Fetch user details
-    cursor.execute('SELECT username, mobile FROM users WHERE id = %s', (session['id'],))
+    cursor.execute('SELECT username, mobile FROM users WHERE id = %s', (user_id,))
     user = cursor.fetchone()
 
     # Fetch overall summary
@@ -436,7 +437,7 @@ def summary():
         FROM ponds
         JOIN sites ON ponds.site_id = sites.id
         WHERE sites.user_id = %s
-    ''', (session['id'],))
+    ''', (user_id,))
     overall = cursor.fetchone()
 
     # Fetch site and pond details
@@ -444,12 +445,60 @@ def summary():
         SELECT sites.id as site_id, sites.name, sites.location, sites.supervisor_name, sites.supervisor_contact,
                ponds.id as pond_id, ponds.area, ponds.prawn_count, ponds.creation_date, ponds.harvested_finish
         FROM sites
-        JOIN ponds ON sites.id = ponds.site_id
+        LEFT JOIN ponds ON sites.id = ponds.site_id
         WHERE sites.user_id = %s
-    ''', (session['id'],))
+    ''', (user_id,))
     ponds = cursor.fetchall()
 
+    # Fetch feed supplied data for the user
+    cursor.execute('''
+        SELECT feed_code, quantity_in_kg
+        FROM feed_supplied
+        WHERE user_id = %s
+    ''', (user_id,))
+    feed_supplied = cursor.fetchall()
+
+    cursor.execute('''
+        SELECT feed_code, SUM(quantity_in_kg) as total_supplied
+        FROM feed_supplied
+        WHERE user_id = %s
+        GROUP BY feed_code
+    ''', (user_id,))
+    feed_supplied_total = cursor.fetchall()
+
+    # Fetch consumed quantity data for each site and feed code
+    cursor.execute('''
+        SELECT feed_code, SUM(quantity_in_kg) as total_consumed
+        FROM site_feed
+        WHERE site_id IN (SELECT id FROM sites WHERE user_id = %s)
+        GROUP BY feed_code
+    ''', (user_id,))
+    consumed_quantities = cursor.fetchall()
+    consumed_quantities_dict = {item['feed_code']: item['total_consumed'] for item in consumed_quantities}
     cursor.close()
+
+    # Process feed supplied and consumed data to determine leftovers
+    total_supplied = {}
+    total_consumed = {}
+
+    # Populate total supplied
+    for item in feed_supplied_total:
+        feed_code = item['feed_code']
+        total_supplied[feed_code] = item['total_supplied']
+
+    # Populate total consumed
+    for item in consumed_quantities:
+        feed_code = item['feed_code']
+        if feed_code not in total_consumed:
+            total_consumed[feed_code] = 0
+        total_consumed[feed_code] += item['total_consumed']
+
+    # Calculate leftover stock
+    leftover_stock = {}
+    for feed_code in total_supplied:
+        supplied = total_supplied.get(feed_code, 0)
+        consumed = total_consumed.get(feed_code, 0)
+        leftover_stock[feed_code] = supplied - consumed
 
     site_data = {}
     site_feed_summary = {}
@@ -517,7 +566,7 @@ def summary():
         site_feed_summary[site_id][feed_code]['total_accumulated_feed'] += pond['accumulated_feed'] if isinstance(pond['accumulated_feed'], (int, float)) else 0
 
         pond['creation_date'] = pond['creation_date'].strftime('%Y-%m-%d') if pond['creation_date'] else 'N/A'
-        pond['harvested_finish'] = pond['harvested_finish'] or False
+        pond['harvested_finish'] = pond.get('harvested_finish', False)
         site_data[site_id]['ponds'].append(pond)
 
     for site_id in site_feed_summary:
@@ -526,14 +575,21 @@ def summary():
             summary['total_accumulated_feed'] = convert_feed_units(summary['total_accumulated_feed'], unit)
 
     return render_template('summary.html',
-                           username=user['username'],
-                           mobile=user['mobile'],
-                           total_ponds=overall['total_ponds'],
-                           total_area=overall['total_area'],
-                           total_prawn_count=overall['total_prawn_count'],
-                           sites=list(site_data.values()),
-                           site_feed_summary=site_feed_summary,
-                           selected_unit=unit)
+                       username=user['username'],
+                       mobile=user['mobile'],
+                       total_ponds=overall['total_ponds'],
+                       total_area=overall['total_area'],
+                       total_prawn_count=overall['total_prawn_count'],
+                       sites=list(site_data.values()),
+                       site_feed_summary=site_feed_summary,
+                       selected_unit=unit,
+                       feed_supplied=feed_supplied,
+                       feed_supplied_total=feed_supplied_total,
+                       consumed_quantities=consumed_quantities_dict,  # Pass the dictionary
+                       leftover_stock=leftover_stock)
+
+
+
 
 @app.route('/harvested_finish/<int:pond_id>', methods=['POST'])
 def harvested_finish(pond_id):
@@ -647,13 +703,28 @@ def user_details(user_id):
     ''', (user_id,))
     feed_supplied = cursor.fetchall()
 
-    # Fetch consumed quantity data for each site and feed code
+    cursor.execute('''
+        SELECT feed_code, SUM(quantity_in_kg) as total_supplied
+        FROM feed_supplied
+        WHERE user_id = %s
+        GROUP BY feed_code
+    ''', (user_id,))
+    feed_supplied_total = cursor.fetchall()
+
+     # Fetch consumed quantity data for each site and feed code
     cursor.execute('''
         SELECT site_id, feed_code, SUM(quantity_in_kg) as total_consumed
         FROM site_feed
         GROUP BY site_id, feed_code
     ''')
     consumed_quantities = cursor.fetchall()  # Ensure this query runs correctly
+    cursor.execute('''
+        SELECT site_id, feed_code, SUM(quantity_in_kg) as total_consumed
+        FROM site_feed
+        WHERE site_id IN (SELECT id FROM sites WHERE user_id = %s)
+        GROUP BY site_id, feed_code
+    ''', (user_id,))
+    consumed_quantities_total = cursor.fetchall()
 
     cursor.close()
 
@@ -675,13 +746,12 @@ def user_details(user_id):
                 'total_feed_per_day': 0,
                 'ponds': [],
                 'site_feed_summary': {},
-                'consumed_quantities': {}  # Initialize consumed_quantities for each site
+                'consumed_quantities': {}
             }
 
         site_data[site_id]['total_area'] += pond['area']
         site_data[site_id]['total_prawn_count'] += pond['prawn_count']
 
-        # Calculate current_day for each pond based on its creation_date
         if pond['creation_date']:
             pond_creation_date = pond['creation_date']
             current_day = (today_date - pond_creation_date).days + 1
@@ -704,7 +774,6 @@ def user_details(user_id):
                 'current_day': 0
             })
 
-        # Calculate feed for next custom_days days
         for day in range(current_day, current_day + custom_days):
             feed_details = calculate_feed_details(pond['prawn_count'], day)
             feed_code = feed_details['feed_code']
@@ -723,7 +792,7 @@ def user_details(user_id):
         pond['creation_date'] = pond['creation_date'].strftime('%Y-%m-%d') if pond['creation_date'] else 'N/A'
         site_data[site_id]['ponds'].append(pond)
 
-    # Update site_data with consumed quantities
+    # Update consumed quantities in the site data
     for item in consumed_quantities:
         site_id = item['site_id']
         feed_code = item['feed_code']
@@ -731,11 +800,26 @@ def user_details(user_id):
         if site_id in site_data:
             site_data[site_id]['consumed_quantities'][feed_code] = total_consumed
 
+    # Calculate feed supplied and consumed summary without grouping feed codes
+    overall_leftover_feed = {}
+
+    for feed_item in feed_supplied_total:
+        feed_code = feed_item['feed_code']
+        total_supplied = feed_item['total_supplied']
+
+        total_consumed = sum(site['consumed_quantities'].get(feed_code, 0) for site in site_data.values())
+
+        # Calculate leftover feed stock for each feed code
+        overall_leftover_feed[feed_code] = total_supplied - total_consumed
+
     return render_template('user_details.html',
                            user=user,
                            sites=list(site_data.values()),
                            custom_days=custom_days,
-                           feed_supplied=feed_supplied)
+                           feed_supplied=feed_supplied,
+                           overall_leftover_feed=overall_leftover_feed)
+
+
 
 
 
@@ -743,6 +827,15 @@ def user_details(user_id):
 @app.route('/admin/delete_user/<int:user_id>', methods=['POST'])
 def delete_user(user_id):
     cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+
+   # Delete related pond_feed records
+    cursor.execute('DELETE FROM pond_feed WHERE pond_id IN (SELECT id FROM ponds WHERE site_id IN (SELECT id FROM sites WHERE user_id = %s))', (user_id,))
+
+    # Delete related site_feed records
+    cursor.execute('DELETE FROM site_feed WHERE site_id IN (SELECT id FROM sites WHERE user_id = %s)', (user_id,))
+
+    # Delete related feed_supplied records
+    cursor.execute('DELETE FROM feed_supplied WHERE user_id = %s', (user_id,))
 
     # Delete related ponds
     cursor.execute('DELETE FROM ponds WHERE site_id IN (SELECT id FROM sites WHERE user_id = %s)', (user_id,))

@@ -96,6 +96,67 @@
                 </p>
             </div>
         </div>
+
+        <!-- Feeds Supplied Section -->
+        <h4>Feeds Supplied</h4>
+        <table class="table table-bordered">
+            <thead>
+                <tr>
+                    <th>Feed Code</th>
+                    <th>Quantity (Kg)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for feed in feed_supplied %}
+                <tr>
+                    <td>{{ feed.feed_code }}</td>
+                    <td>{{ feed.quantity_in_kg }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <h2>Overall Leftover Feed Stock</h2>
+        <div class="table-responsive">
+            <table class="table table-bordered">
+                <thead class="thead-light">
+                    <tr>
+                        <th>Feed Code</th>
+                        <th>Overall Leftover Quantity ({{ selected_unit if selected_unit else 'kg' }})</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for feed_code, leftover in leftover_stock.items() %}
+                    <tr>
+                        <td>{{ feed_code }}</td>
+                        <td>{{ leftover | round(2) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+<!-- Consumed Quantity Section -->
+        <h4>Consumed Quantity</h4>
+        <div class="table-responsive">
+            <table class="table table-bordered">
+                <thead class="thead-light">
+                    <tr>
+                        <th>Feed Code</th>
+                        <th>Quantity Consumed in Kg</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for feed_code, consumed_quantity in consumed_quantities.items() %}
+                    <tr>
+                        <td>{{ feed_code }}</td>
+                        <td>{{ consumed_quantity | round(2) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
         <form method="POST" action="{{ url_for('summary') }}">
             <div class="form-group">
                 <label for="unit">Select Unit:</label>
@@ -117,6 +178,7 @@
                 <p><strong>Total Prawn Count:</strong> {{ site.total_prawn_count }}</p>
                 <p><strong>Supervisor Name:</strong> {{ site.supervisor_name }}</p>
                 <p><strong>Supervisor Contact:</strong> {{ site.supervisor_contact }}</p>
+
                 <h4>Ponds</h4>
                 <div class="table-responsive">
                     <table class="table table-bordered table-hover">
@@ -160,27 +222,45 @@
                     </table>
                 </div>
 
-                <h5>Site Feed Summary</h5>
-                <div class="table-responsive">
-                    <table class="table table-bordered table-hover">
-                        <thead class="thead-light">
-                            <tr>
-                                <th>Feed Code</th>
-                                <th>Total Feed Per Day ({{ selected_unit }})</th>
-                                <th>Total Accumulated Feed ({{ selected_unit }})</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for feed_code, summary in site_feed_summary[site.id].items() %}
-                            <tr>
-                                <td>{{ feed_code }}</td>
-                                <td>{{ summary.total_feed_per_day | round(2) }}</td>
-                                <td>{{ summary.total_accumulated_feed | round(2) }}</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
+                <!-- Add Consumed Quantity Form -->
+                <h4>Add Consumed Quantity</h4>
+                <form class="consumed-quantity-form" method="POST" action="{{ url_for('add_consumed_quantity') }}" id="consumed-quantity-form">
+                    <div class="form-group">
+                        <label for="feed-code">Select Feed Code:</label>
+                        <select class="feed-code-dropdown form-control" id="feed-code" name="feed_code">
+                            <option value="">Select Feed Code</option>
+                            <option value="7701">7701</option>
+                            <option value="7702">7702</option>
+                            <option value="7702P">7702P</option>
+                            <option value="7703">7703</option>
+                            <option value="7703S">7703S</option>
+                            <option value="7703P">7703P</option>
+                            <option value="7730 4S">7730 4S</option>
+                            <option value="7703 4S">7703 4S</option>
+                            <option value="7704 4S">7704 4S</option>
+                            <option value="7705 4S">7705 4S</option>
+                            <option value="7706 4S">7706 4S</option>
+                            <option value="7707 4S">7707 4S</option>
+                            <option value="7708 4S">7708 4S</option>
+                            <option value="7709 4S">7709 4S</option>
+                            <option value="7710 4S">7710 4S</option>
+                            <option value="7711 4S">7711 4S</option>
+                            <option value="7712 4S">7712 4S</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="quantity-consumed-{{ site.id }}">Quantity Consumed (kg):</label>
+                        <input type="number" class="form-control" id="quantity-consumed-{{ site.id }}" name="quantity_consumed" min="0" step="0.01" required>
+                    </div>
+                    <input type="hidden" id="user-id-{{ site.id }}" name="user_id" value="">
+                    <input type="hidden" name="site_id" value="{{ site.id }}">
+                    <input type="hidden" name="pond_id" value="{{ pond_id }}">
+                    <div class="mt-4">
+                        <button type="submit" class="btn btn-primary">Add Consumed Quantity</button>
+                    </div>
+                </form>
+
+
             </div>
         </div>
         {% endfor %}
@@ -251,6 +331,46 @@
                 });
             });
         });
+    </script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('submit', function(event) {
+            if (event.target.classList.contains('consumed-quantity-form')) {
+                event.preventDefault(); // Prevent the form from submitting the default way
+                const formData = new FormData(event.target);
+                const submitButton = event.target.querySelector('button[type="submit"]');
+
+                // Disable the submit button to prevent multiple clicks
+                submitButton.disabled = true;
+                submitButton.textContent = 'Submitting...';
+
+                fetch('/user/add_consumed_quantity', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        if (data.reload) {
+                            window.location.reload(); // Reload the page to reflect changes
+                        }
+                    } else {
+                        alert(data.message); // Show error message
+                        // Re-enable the button if there's an error
+                        submitButton.disabled = false;
+                        submitButton.textContent = 'Add Consumed Quantity';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An error occurred. Please try again.');
+                    // Re-enable the button on network or server error
+                    submitButton.disabled = false;
+                    submitButton.textContent = 'Add Consumed Quantity';
+                });
+            }
+        });
+    });
     </script>
 </body>
 </html>

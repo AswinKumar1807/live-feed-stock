@@ -69,7 +69,9 @@
     <div class="container mt-5">
         <div class="jumbotron">
             <h1 class="display-4">{{ user.username }}'s Feed Summary</h1>
-            <h4>Saved Feed Supplied</h4>
+        </div>
+
+        <h4>Feeds Supplied</h4>
             <table class="table table-bordered">
                 <thead>
                     <tr>
@@ -86,9 +88,8 @@
                     {% endfor %}
                 </tbody>
             </table>
-        </div>
 
-        <h2>Supplied Form</h2>
+        <h2>Feeds to supply form</h2>
         <form id="feed-form" method="POST">
             <!-- Hidden input for storing user ID -->
             <input type="hidden" id="userIdInput" name="user_id">
@@ -127,29 +128,15 @@
             <!--<button type="button" id="addRowBtn" class="btn btn-secondary">Add Another Feed</button>-->
             <button type="button" id="saveFeedSuppliedBtn" class="btn btn-primary">Save Feed Supplied</button>
         </form>
-
-<!-- JavaScript function to add more feed entries -->
-<script>
-function addFeedEntry() {
-    const feedSection = document.getElementById('feed-supplied-section');
-    
-    // Clone the first feed entry
-    const newEntry = feedSection.querySelector('.feed-entry').cloneNode(true);
-    
-    // Clear the quantity input field in the new entry
-    newEntry.querySelector('input[name="quantity[]"]').value = '';
-    
-    // Append the new entry to the feed section
-    feedSection.appendChild(newEntry);
-}
-</script>
-
         <!-- Feed Calculation Form -->
         <div class="form-container">
             <form id="feed-form" method="POST">
                 <div class="form-group">
                     <label for="custom_days">Enter number of days:</label>
                     <input type="number" class="form-control" id="custom_days" name="custom_days" value="{{ custom_days }}" min="1" max="120">
+                </div>
+                <div class="mt-4">
+                    <button type="submit" class="btn btn-primary">Calculate Feed Supply</button>
                 </div>
                 <div class="form-group">
                     <label for="unit">Select unit:</label>
@@ -159,9 +146,27 @@ function addFeedEntry() {
                         <option value="metric" {% if selected_unit == 'metric' %}selected{% endif %}>Metric</option>
                     </select>
                 </div>
-                <div class="mt-4">
-                    <button type="submit" class="btn btn-primary">Calculate Feed Supply</button>
+                <!-- Overall Leftover Feed Stock -->
+                <h2>Overall Leftover Feed Stock</h2>
+                <div class="table-responsive">
+                    <table class="table table-bordered">
+                        <thead class="thead-light">
+                            <tr>
+                                <th>Feed Code</th>
+                                <th>Overall Leftover Quantity ({{ selected_unit if selected_unit else 'kg' }})</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for feed_code, leftover in overall_leftover_feed.items() %}
+                            <tr>
+                                <td>{{ feed_code }}</td>
+                                <td>{{ leftover | round(2) }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
                 </div>
+
             </form>
         </div>
 
@@ -175,7 +180,6 @@ function addFeedEntry() {
                 <p><strong>Total Prawn Count:</strong> {{ site.total_prawn_count | round(2) }}</p>
                 <p><strong>Supervisor Name:</strong> {{ site.supervisor_name }}</p>
                 <p><strong>Supervisor Contact:</strong> {{ site.supervisor_contact }}</p>
-                
                 <h4>Ponds</h4>
                 <div class="table-responsive">
                     <table class="table table-bordered table-hover">
@@ -229,7 +233,7 @@ function addFeedEntry() {
                         </tbody>
                     </table>
                 </div>
-                
+
                 <h4>Consumed Quantity</h4>
                 <div class="table-responsive">
                     <table class="table table-bordered">
@@ -252,36 +256,6 @@ function addFeedEntry() {
 
                 <h4>Consumed Quantity</h4>
                 <form class="consumed-quantity-form" method="POST" action="{{ url_for('add_consumed_quantity') }}" id="consumed-quantity-form">
-                    <script>
-                    document.addEventListener('DOMContentLoaded', function() {
-                    document.addEventListener('submit', function(event) {
-                        if (event.target.classList.contains('consumed-quantity-form')) {
-                            event.preventDefault(); // Prevent the form from submitting the default way
-                
-                            const formData = new FormData(event.target);
-                            fetch('/user/add_consumed_quantity', {
-                                method: 'POST',
-                                body: formData
-                            })
-                            .then(response => response.json())
-                            .then(data => {
-                                if (data.success) {
-                                    if (data.reload) {
-                                        window.location.reload(); // Reload the page to reflect changes
-                                    }
-                                } else {
-                                    alert(data.message);
-                                }
-                            })
-                            .catch(error => {
-                                console.error('Error:', error);
-                            });
-                        }
-                    });
-                });
-
-
-                </script>
                     <div class="form-group">
                         <label for="feed-code">Select Feed Code:</label>
                         <select class="feed-code-dropdown form-control" id="feed-code" name="feed_code">
@@ -306,8 +280,8 @@ function addFeedEntry() {
                         </select>
                     </div>
                     <div class="form-group">
-                    <label for="quantity-consumed-{{ site.id }}">Quantity Consumed (kg):</label>
-                    <input type="number" class="form-control" id="quantity-consumed-{{ site.id }}" name="quantity_consumed" min="0" step="0.01" required>
+                        <label for="quantity-consumed-{{ site.id }}">Quantity Consumed (kg):</label>
+                        <input type="number" class="form-control" id="quantity-consumed-{{ site.id }}" name="quantity_consumed" min="0" step="0.01" required>
                     </div>
                     <input type="hidden" id="user-id-{{ site.id }}" name="user_id" value="">
                     <input type="hidden" name="site_id" value="{{ site.id }}">
@@ -315,10 +289,10 @@ function addFeedEntry() {
                     <div class="mt-4">
                         <button type="submit" class="btn btn-primary">Add Consumed Quantity</button>
                     </div>
-                    </form>
+                </form>
+
             </div>
         </div>
-        
         {% endfor %}
     </div>
 
@@ -333,7 +307,7 @@ function addFeedEntry() {
             <p>&copy; 2024 Prawn Farm Management. All Rights Reserved.</p>
         </div>
     </footer>
-
+    
     <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.2/dist/umd/popper.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
@@ -387,6 +361,8 @@ function addFeedEntry() {
                 convertFeedValues(selectedUnit);
             });
         });
+        </script>
+    <script>
 
         function addFeedEntry() {
             const section = document.getElementById('feed-supplied-section');
@@ -427,16 +403,13 @@ function addFeedEntry() {
 
             section.appendChild(newEntry);
         }
-    </script>
-        <script>
-        // Extract user ID from the URL
+        </script>
+    <script>
         function getUserIdFromUrl() {
             const url = window.location.href;
             const parts = url.split('/');
             return parts[parts.length - 1];  // The last part of the URL should be the user ID
         }
-
-       
         document.getElementById("userIdInput").value = getUserIdFromUrl();
 
         document.getElementById("saveFeedSuppliedBtn").addEventListener("click", function () {
@@ -487,8 +460,62 @@ function addFeedEntry() {
                 alert("An error occurred while saving data.");
             });
         }
+        </script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('submit', function(event) {
+            if (event.target.classList.contains('consumed-quantity-form')) {
+                event.preventDefault(); // Prevent the form from submitting the default way
+                const formData = new FormData(event.target);
+                const submitButton = event.target.querySelector('button[type="submit"]');
+
+                // Disable the submit button to prevent multiple clicks
+                submitButton.disabled = true;
+                submitButton.textContent = 'Submitting...';
+
+                fetch('/user/add_consumed_quantity', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        if (data.reload) {
+                            window.location.reload(); // Reload the page to reflect changes
+                        }
+                    } else {
+                        alert(data.message); // Show error message
+                        // Re-enable the button if there's an error
+                        submitButton.disabled = false;
+                        submitButton.textContent = 'Add Consumed Quantity';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An error occurred. Please try again.');
+                    // Re-enable the button on network or server error
+                    submitButton.disabled = false;
+                    submitButton.textContent = 'Add Consumed Quantity';
+                });
+            }
+        });
+    });
     </script>
-    
+    <script>
+        function addFeedEntry() {
+            const feedSection = document.getElementById('feed-supplied-section');
+        
+            // Clone the first feed entry
+            const newEntry = feedSection.querySelector('.feed-entry').cloneNode(true);
+        
+            // Clear the quantity input field in the new entry
+            newEntry.querySelector('input[name="quantity[]"]').value = '';
+        
+            // Append the new entry to the feed section
+            feedSection.appendChild(newEntry);
+        }
+        </script>
+
 
 
 </body>
