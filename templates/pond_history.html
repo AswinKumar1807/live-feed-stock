@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pond History</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        /* Custom CSS for modern design */
+        body {
+            background-color: #f8f9fa; /* Light grey background */
+            color: #495057; /* Dark grey text */
+        }
+        .card {
+            transition: transform 0.2s ease-in-out; /* Smooth card animation */
+            border-radius: 10px;
+            border: none;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.1); /* Soft shadow */
+        }
+        .card-header {
+            background-color: #007bff; /* Blue header background */
+            color: #fff; /* White text */
+            border-radius: 10px 10px 0 0;
+        }
+        .card-body {
+            background-color: #fff; /* White background for card body */
+            border-radius: 0 0 10px 10px;
+        }
+        .table {
+            background-color: #fff; /* White background for tables */
+        }
+        .btn-warning {
+            background-color: #ffc107; /* Yellow button */
+            border-color: #ffc107; /* Yellow border */
+            color: #212529; /* Dark text */
+        }
+        .btn-warning:hover {
+            background-color: #ffca2c; /* Lighter yellow on hover */
+            border-color: #ffca2c;
+            color: #212529;
+        }
+        .navbar {
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Navbar shadow */
+        }
+    </style>
+</head>
+<body>
+
+    <nav class="navbar navbar-expand-lg navbar-light bg-light">
+        <a class="navbar-brand" href="#">Pond Management</a>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav ml-auto">
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('summary') }}">Back to Summary</a>
+                </li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="card">
+            <div class="card-header">
+                Pond ID: {{ pond.id }} - History
+            </div>
+            <div class="card-body">
+                <p>Area: {{ pond.area }} | Prawn Count: {{ pond.prawn_count }} | Creation Date: {{ pond.creation_date }}</p>
+
+                <table class="table table-bordered table-hover">
+                    <thead class="thead-light">
+                        <tr>
+                            <th>Day Number</th>
+                            <th>Feed Per Day (kg)</th>
+                            <th>Feed Increase Per Day (kg)</th>
+                            <th>Accumulated Feed (kg)</th>
+                            <th>Feed Code</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for day in history %}
+                        <tr>
+                            <td>{{ day.day_number }}</td>
+                            <td>{{ day.feed_per_day }}</td>
+                            <td>{{ day.feed_increase_per_day }}</td>
+                            <td>{{ day.accumulated_feed }}</td>
+                            <td>{{ day.feed_code }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+
+                <a href="{{ url_for('summary') }}" class="btn btn-warning">Back to Summary</a>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
+
+</body>
+</html>

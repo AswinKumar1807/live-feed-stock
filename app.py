@@ -543,6 +543,23 @@ def summary():
                 }
             pond.update(feed_details)
             pond['current_day'] = current_day
+
+            # Check if feed history for today already exists
+            cursor = mysql.connection.cursor()
+            cursor.execute('''
+                SELECT 1 FROM pond_feed_history WHERE pond_id = %s AND day_number = %s
+            ''', (pond['pond_id'], current_day))
+            existing_entry = cursor.fetchone()
+
+            if not existing_entry:
+                # Insert new feed history entry only if not already inserted today
+                cursor.execute('''
+                    INSERT INTO pond_feed_history (pond_id, day_number, feed_per_day, feed_increase_per_day, accumulated_feed, feed_code)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                ''', (pond['pond_id'], current_day, feed_details['feed_per_day'], feed_details['feed_increase_per_day'], feed_details['accumulated_feed'], feed_details['feed_code']))
+                mysql.connection.commit()
+
+            cursor.close()
         else:
             pond.update({
                 'feed_per_day': 'N/A',
@@ -589,6 +606,36 @@ def summary():
                        leftover_stock=leftover_stock)
 
 
+
+@app.route('/show_history/<int:pond_id>', methods=['GET'])
+def show_history(pond_id):
+    if 'loggedin' not in session:
+        return redirect(url_for('login'))
+
+    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+
+    # Fetch the history for the specified pond
+    cursor.execute('''
+        SELECT day_number, feed_per_day, feed_increase_per_day, accumulated_feed, feed_code
+        FROM pond_feed_history
+        WHERE pond_id = %s
+        ORDER BY day_number ASC
+    ''', (pond_id,))
+    history = cursor.fetchall()
+
+    cursor.execute('''
+        SELECT ponds.id, ponds.area, ponds.prawn_count, ponds.creation_date
+        FROM ponds
+        WHERE id = %s
+    ''', (pond_id,))
+    pond_details = cursor.fetchone()
+    
+    cursor.close()
+
+    # Render the history in a new template
+    return render_template('pond_history.html',
+                           pond=pond_details,
+                           history=history)
 
 
 @app.route('/harvested_finish/<int:pond_id>', methods=['POST'])
