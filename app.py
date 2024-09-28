@@ -282,20 +282,26 @@ def login():
         password = request.form['password']
         if ((username == 'Admin') & (password == 'Admin@123')):
             session['loggedin'] = True
+            session['role'] = 'admin'
             return redirect(url_for('admin'))
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
         cursor.execute('SELECT * FROM users WHERE username = %s', (username,))
         user = cursor.fetchone()
-        cursor.close()
-
         if user and bcrypt.check_password_hash(user['password'], password):
-            session['loggedin'] = True
-            session['id'] = user['id']
-            session['username'] = user['username']
-            return redirect(url_for('summary'))
+            if user['status'] == 'approved':  # Check if the user is approved
+                session['loggedin'] = True
+                session['id'] = user['id']
+                session['username'] = user['username']
+                session['role'] = user['role']  # Store the role in the session
+                flash('Login successful!', 'success')
+                return redirect(url_for('summary'))
+            else:
+                flash('Your account is not approved yet. Please contact the admin.', 'danger')
         else:
-            flash('Invalid username or password! Please contact Admin for recovery', 'danger')
+            flash('Incorrect username or password!', 'danger')
     return render_template('login.html')
+
+
 
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
@@ -304,12 +310,35 @@ def signup():
         mobile = request.form['mobile']
         password = bcrypt.generate_password_hash(request.form['password']).decode('utf-8')
         cursor = mysql.connection.cursor()
-        cursor.execute('INSERT INTO users (username, mobile, password) VALUES (%s, %s, %s)', (username, mobile, password))
+        # Set status to 'pending'
+        cursor.execute('INSERT INTO users (username, mobile, password, status) VALUES (%s, %s, %s, %s)',
+                       (username, mobile, password, 'pending'))
         mysql.connection.commit()
         cursor.close()
-        flash('You have successfully registered! Please login.', 'success')
+        flash('You have successfully registered! Please wait for admin approval before you can log in.', 'info')
         return redirect(url_for('login'))
     return render_template('signup.html')
+
+
+@app.route('/approve_user/<int:user_id>', methods=['POST'])
+def approve_user(user_id):
+    if 'loggedin' not in session or 'role' not in session:
+        flash('Please log in to access this page.', 'danger')
+        return redirect(url_for('login'))
+
+    if session['role'] != 'admin':  # Role-based access control
+        flash('Unauthorized access!', 'danger')
+        return redirect(url_for('admin'))
+
+    cursor = mysql.connection.cursor()
+    cursor.execute('UPDATE users SET status = %s WHERE id = %s', ('approved', user_id))
+    mysql.connection.commit()
+    cursor.close()
+
+    flash('User approved successfully!', 'success')
+    return redirect(url_for('admin'))
+
+
 
 @app.route('/signupadmin', methods=['GET', 'POST'])
 def signupadmin():
@@ -629,7 +658,7 @@ def show_history(pond_id):
         WHERE id = %s
     ''', (pond_id,))
     pond_details = cursor.fetchone()
-    
+
     cursor.close()
 
     # Render the history in a new template
@@ -698,10 +727,13 @@ def admin():
     # Calculate the total feed required per day from the feed_summary
     total_feed_per_day = sum(site['feed_per_day'] for site in feed_summary)
 
-    # Fetch user-specific details including total feed per day
     cursor.execute('''
-        SELECT users.id, users.username, COUNT(sites.id) as site_count, COUNT(ponds.id) as pond_count,
-               SUM(ponds.prawn_count) as total_prawn_count, COALESCE(SUM(ponds.feed_per_day), 0) as total_feed_per_day
+        SELECT users.id, users.username,
+               COUNT(DISTINCT sites.id) as site_count,
+               COUNT(ponds.id) as pond_count,
+               SUM(ponds.prawn_count) as total_prawn_count,
+               COALESCE(SUM(ponds.feed_per_day), 0) as total_feed_per_day,
+               users.status  -- Include the status in the query
         FROM users
         LEFT JOIN sites ON users.id = sites.user_id
         LEFT JOIN ponds ON sites.id = ponds.site_id
@@ -709,9 +741,15 @@ def admin():
     ''')
     user_details = cursor.fetchall()
 
+
+    # Fetch pending users for approval
+    cursor.execute('SELECT id, username, mobile FROM users WHERE status = %s', ('pending',))
+    pending_users = cursor.fetchall()
+
     cursor.close()
 
     return render_template('admin_dashboard.html',
+                           pending_users=pending_users,
                            total_users=total_users,
                            total_sites=total_sites,
                            total_ponds=total_ponds,
@@ -1029,7 +1067,16 @@ def save_feed_supplied():
         mysql.connection.rollback()
         return jsonify({"success": False, "error": str(e)})
 
-
+@app.route('/telephone')
+def telephone_page():
+    contacts = [
+        {'id': 1, 'name': 'Arun', 'number': '7019791506'},
+        {'id': 2, 'name': 'Chitraarasu', 'number': '7019791506'},
+        {'id': 3, 'name': 'Kumar', 'number': '7019791506'},
+        {'id': 4, 'name': 'Dheepan', 'number': '7019791506'},
+        {'id': 5, 'name': 'Bala', 'number': '7019791506'}
+    ]
+    return render_template('telephone.html', contacts=contacts)
 
 
 
