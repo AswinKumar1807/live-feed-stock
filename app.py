@@ -7,6 +7,7 @@ import re
 import pandas as pd
 import io
 from flask import send_file
+from openpyxl.utils.dataframe import dataframe_to_rows
 
 
 app = Flask(__name__)
@@ -204,12 +205,14 @@ def download_feed_sheet():
 
     cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
-    # Fetch site and pond details
+    # Fetch site, pond, and supervisor details
     cursor.execute('''
-        SELECT sites.id as site_id, sites.name as site_name, sites.location, ponds.id as pond_id, ponds.area, ponds.prawn_count, ponds.creation_date
+        SELECT sites.id as site_id, sites.name as site_name, sites.location, sites.supervisor_name, sites.supervisor_contact,
+               ponds.id as pond_id, ponds.area, ponds.prawn_count, ponds.creation_date
         FROM sites
         JOIN ponds ON sites.id = ponds.site_id
         WHERE sites.user_id = %s
+        ORDER BY sites.name, ponds.id  -- Sort by site name and pond id
     ''', (session['id'],))
     ponds = cursor.fetchall()
 
@@ -217,9 +220,13 @@ def download_feed_sheet():
 
     feed_sheets = []
 
+    # Track ponds by site and use a counter for pond numbering
+    site_pond_map = {}
+
     for pond in ponds:
         pond_feed_data = []
 
+        # Generate the feed data for each day
         for day in range(1, 121):
             feed_details = calculate_feed_details(pond['prawn_count'], day)
             if feed_details is None:
@@ -230,7 +237,7 @@ def download_feed_sheet():
                     'feed_code': 'N/A'
                 }
 
-            # Calculate the additional columns
+            # Calculate the additional columns (bags and metric tons)
             feed_per_day_bag = (feed_details['feed_per_day'] / 25) if feed_details['feed_per_day'] != 'N/A' else 'N/A'
             feed_increase_per_day_bag = (feed_details['feed_increase_per_day'] / 25) if feed_details['feed_increase_per_day'] != 'N/A' else 'N/A'
             accumulated_feed_bag = (feed_details['accumulated_feed'] / 25) if feed_details['accumulated_feed'] != 'N/A' else 'N/A'
@@ -239,6 +246,7 @@ def download_feed_sheet():
             feed_increase_per_day_metric = (feed_details['feed_increase_per_day'] / 100) if feed_details['feed_increase_per_day'] != 'N/A' else 'N/A'
             accumulated_feed_metric = (feed_details['accumulated_feed'] / 100) if feed_details['accumulated_feed'] != 'N/A' else 'N/A'
 
+            # Append daily feed data
             pond_feed_data.append({
                 'Day': day,
                 'Feed Per Day (kg)': feed_details['feed_per_day'],
@@ -253,19 +261,48 @@ def download_feed_sheet():
                 'Feed Code': feed_details['feed_code']
             })
 
-        pond_df = pd.DataFrame(pond_feed_data)
-        feed_sheets.append({
-            'site_name': pond['site_name'],
+        # Group by site and sort ponds by pond_id
+        if pond['site_name'] not in site_pond_map:
+            site_pond_map[pond['site_name']] = []
+        site_pond_map[pond['site_name']].append({
             'pond_id': pond['pond_id'],
-            'pond_data': pond_df
+            'total_area': pond['area'],
+            'total_prawn_count': pond['prawn_count'],
+            'creation_date': pond['creation_date'],
+            'supervisor_name': pond['supervisor_name'],
+            'supervisor_contact': pond['supervisor_contact'],
+            'pond_data': pd.DataFrame(pond_feed_data)
         })
 
-    # Create a Pandas Excel writer using an in-memory buffer
+    # Sort ponds by site and then by ascending pond_id, reset counter for each site
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-        for sheet in feed_sheets:
-            sheet_name = f'{sheet["site_name"]}-{sheet["pond_id"]}'
-            sheet['pond_data'].to_excel(writer, sheet_name=sheet_name, index=False)
+        for site_name, ponds_data in site_pond_map.items():
+            ponds_data_sorted = sorted(ponds_data, key=lambda p: p['pond_id'])  # Sort ponds by pond_id
+
+            for index, sheet in enumerate(ponds_data_sorted, start=1):
+                # Name the sheet based on the pond number and id
+                sheet_name = f'{site_name}- {sheet["pond_id"]} - Pond {index}'
+
+                # Write the site and pond details to the top of the sheet
+                workbook = writer.book
+                worksheet = workbook.create_sheet(title=sheet_name)
+
+                # Add site and pond details manually
+                worksheet.append(['Site:', site_name])
+                worksheet.append(['Total Area:', sheet['total_area']])
+                worksheet.append(['Total Prawn Count:', sheet['total_prawn_count']])
+                worksheet.append(['Supervisor Name:', sheet['supervisor_name']])
+                worksheet.append(['Supervisor Contact:', sheet['supervisor_contact']])
+                worksheet.append(['Pond ID:', sheet['pond_id']])
+                worksheet.append(['Pond Area:', sheet['total_area']])
+                worksheet.append(['Prawn Count:', sheet['total_prawn_count']])
+                worksheet.append(['Creation Date:', sheet['creation_date']])  # New line for Creation Date
+                worksheet.append([])  # Empty row before the table data
+
+                # Write the pond feed data below the details
+                for row in dataframe_to_rows(sheet['pond_data'], index=False, header=True):
+                    worksheet.append(row)
 
     buffer.seek(0)
 
