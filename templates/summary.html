@@ -225,44 +225,60 @@
                     </table>
                 </div>
 
-                <!-- Add Consumed Quantity Form -->
-                <h4>Add Consumed Quantity</h4>
-                <form class="consumed-quantity-form" method="POST" action="{{ url_for('add_consumed_quantity') }}" id="consumed-quantity-form">
-                    <div class="form-group">
-                        <label for="feed-code">Select Feed Code:</label>
-                        <select class="feed-code-dropdown form-control" id="feed-code" name="feed_code">
-                            <option value="">Select Feed Code</option>
-                            <option value="7701">7701</option>
-                            <option value="7702">7702</option>
-                            <option value="7702P">7702P</option>
-                            <option value="7703">7703</option>
-                            <option value="7703S">7703S</option>
-                            <option value="7703P">7703P</option>
-                            <option value="7730 4S">7730 4S</option>
-                            <option value="7703 4S">7703 4S</option>
-                            <option value="7704 4S">7704 4S</option>
-                            <option value="7705 4S">7705 4S</option>
-                            <option value="7706 4S">7706 4S</option>
-                            <option value="7707 4S">7707 4S</option>
-                            <option value="7708 4S">7708 4S</option>
-                            <option value="7709 4S">7709 4S</option>
-                            <option value="7710 4S">7710 4S</option>
-                            <option value="7711 4S">7711 4S</option>
-                            <option value="7712 4S">7712 4S</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="quantity-consumed-{{ site.id }}">Quantity Consumed (kg):</label>
-                        <input type="number" class="form-control" id="quantity-consumed-{{ site.id }}" name="quantity_consumed" min="0" step="0.01" required>
-                    </div>
-                    <input type="hidden" id="user-id-{{ site.id }}" name="user_id" value="">
-                    <input type="hidden" name="site_id" value="{{ site.id }}">
-                    <input type="hidden" name="pond_id" value="{{ pond_id }}">
-                    <div class="mt-4">
-                        <button type="submit" class="btn btn-primary">Add Consumed Quantity</button>
-                    </div>
-                </form>
 
+                    <h4>Add Consumed Quantity</h4>
+                    <form class="consumed-quantity-form" method="POST" action="{{ url_for('add_consumed_quantity') }}" id="consumed-quantity-form">
+                        <div class="form-group">
+                            <label for="feed-code">Select Feed Code:</label>
+                             <select class="feed-code-dropdown form-control" id="feed-code" name="feed_code">
+                                                <option value="">Select Feed Code</option>
+                                                <option value="7701">7701</option>
+                                                <option value="7702">7702</option>
+                                                <option value="7702P">7702P</option>
+                                                <option value="7703">7703</option>
+                                                <option value="7703S">7703S</option>
+                                                <option value="7703P">7703P</option>
+                                                <option value="7730 4S">7730 4S</option>
+                                                <option value="7703 4S">7703 4S</option>
+                                                <option value="7704 4S">7704 4S</option>
+                                                <option value="7705 4S">7705 4S</option>
+                                                <option value="7706 4S">7706 4S</option>
+                                                <option value="7707 4S">7707 4S</option>
+                                                <option value="7708 4S">7708 4S</option>
+                                                <option value="7709 4S">7709 4S</option>
+                                                <option value="7710 4S">7710 4S</option>
+                                                <option value="7711 4S">7711 4S</option>
+                                                <option value="7712 4S">7712 4S</option>
+                                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="pond-id">Select Pond:</label>
+                            <select class="form-control" id="pond-id" name="pond_id" required>
+                                <option value="">Select Pond</option>
+                                {% for pond in site.ponds %}
+                                <option value="{{ pond.id }}">{{ site.name }}-{{ pond.pond_id }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="pond-id">Select Timing:</label>
+                            <select class="form-control" id="pond-id" name="pond_id" required>
+                                <option value="">Select Pond</option>
+                                <option value="6AM - 9AM">6AM - 9AM</option>
+                                <option value="9AM - 12PM">9AM - 12PM</option>
+                                <option value="12PM - 5PM">12PM - 5PM</option>
+                                <option value="5PM - 10PM">5PM - 10PM</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="quantity-consumed-{{ site.id }}">Quantity Consumed (kg):</label>
+                            <input type="number" class="form-control" id="quantity-consumed-{{ site.id }}" name="quantity_consumed" min="0" step="0.01" required>
+                        </div>
+                        <input type="hidden" name="site_id" value="{{ site.id }}">
+                        <div class="mt-4">
+                            <button type="submit" class="btn btn-primary">Add Consumed Quantity</button>
+                        </div>
+                    </form>
 
             </div>
         </div>
@@ -337,43 +353,73 @@
     </script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-        document.addEventListener('submit', function(event) {
-            if (event.target.classList.contains('consumed-quantity-form')) {
-                event.preventDefault(); // Prevent the form from submitting the default way
-                const formData = new FormData(event.target);
-                const submitButton = event.target.querySelector('button[type="submit"]');
+            document.addEventListener('submit', function(event) {
+                if (event.target.classList.contains('consumed-quantity-form')) {
+                    event.preventDefault(); // Prevent the form from submitting the default way
+                    const formData = new FormData(event.target);
+                    const submitButton = event.target.querySelector('button[type="submit"]');
 
-                // Disable the submit button to prevent multiple clicks
-                submitButton.disabled = true;
-                submitButton.textContent = 'Submitting...';
+                    // Log pond_id for debugging
+                    console.log('Selected Pond ID:', formData.get('pond_id'));
 
-                fetch('/user/add_consumed_quantity', {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        if (data.reload) {
-                            window.location.reload(); // Reload the page to reflect changes
+                    // Disable the submit button to prevent multiple clicks
+                    submitButton.disabled = true;
+                    submitButton.textContent = 'Submitting...';
+
+                    fetch('/user/add_consumed_quantity', {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            if (data.reload) {
+                                window.location.reload(); // Reload the page to reflect changes
+                            }
+                        } else {
+                            alert(data.message); // Show error message
+                            // Re-enable the button if there's an error
+                            submitButton.disabled = false;
+                            submitButton.textContent = 'Add Consumed Quantity';
                         }
-                    } else {
-                        alert(data.message); // Show error message
-                        // Re-enable the button if there's an error
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('An error occurred. Please try again.');
+                        // Re-enable the button on network or server error
                         submitButton.disabled = false;
                         submitButton.textContent = 'Add Consumed Quantity';
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    alert('An error occurred. Please try again.');
-                    // Re-enable the button on network or server error
-                    submitButton.disabled = false;
-                    submitButton.textContent = 'Add Consumed Quantity';
-                });
-            }
+                    });
+                }
+            });
+        });
+    </script>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('.view-feed-history').forEach(button => {
+            button.addEventListener('click', function() {
+                const pondId = this.dataset.pondId;
+
+                // Fetch feed history for this pond via AJAX or navigate to a new page
+                fetch(`/user/view_feed_history/${pondId}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            // Display feed history in a modal or on a new page
+                            console.log(data.feed_history); // Process data to display it
+                        } else {
+                            alert(data.message);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('Failed to fetch feed history.');
+                    });
+            });
         });
     });
-    </script>
+</script>
+
 </body>
 </html>
