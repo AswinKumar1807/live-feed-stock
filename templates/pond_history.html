@@ -29,18 +29,18 @@
         .table {
             background-color: #fff; /* White background for tables */
         }
-        .btn-warning {
-            background-color: #ffc107; /* Yellow button */
-            border-color: #ffc107; /* Yellow border */
-            color: #212529; /* Dark text */
-        }
-        .btn-warning:hover {
-            background-color: #ffca2c; /* Lighter yellow on hover */
-            border-color: #ffca2c;
-            color: #212529;
-        }
         .navbar {
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Navbar shadow */
+        }
+
+        /* Print styles */
+        @media print {
+            .no-print {
+                display: none; /* Hide these elements when printing */
+            }
+            .print-only {
+                display: block; /* Show these elements only when printing */
+            }
         }
     </style>
 </head>
@@ -50,7 +50,7 @@
         <a class="navbar-brand" href="#">Pond Management</a>
         <div class="collapse navbar-collapse" id="navbarNav">
             <ul class="navbar-nav ml-auto">
-                <li class="nav-item">
+                <li class="nav-item no-print">
                     <a class="nav-link" href="{{ url_for('summary') }}">Back to Summary</a>
                 </li>
             </ul>
@@ -58,43 +58,51 @@
     </nav>
 
     <div class="container mt-4">
-        <div class="card">
-            <div class="card-header">
-                Pond ID: {{ pond.id }} - History
-            </div>
-            <div class="card-body">
-                <p>Area: {{ pond.area }} | Prawn Count: {{ pond.prawn_count }} | Creation Date: {{ pond.creation_date }}</p>
+    <div class="card">
+        <div class="card-header">
+            Pond ID: {{ pond.id }} - History | Site: {{ pond.site_name }}  <!-- Display site name -->
+        </div>
+        <div class="card-body">
+            <p>Area: {{ pond.area }} | Prawn Count: {{ pond.prawn_count }} | Creation Date: {{ pond.creation_date }}</p>
 
-                <table class="table table-bordered table-hover">
-                    <thead class="thead-light">
-                        <tr>
-                            <th>Day Number</th>
-                            <th>Feed Per Day (kg)</th>
-                            <th>Feed Increase Per Day (kg)</th>
-                            <th>Accumulated Feed (kg)</th>
-                            <th>Feed Code</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for day in history %}
-                        <tr>
-                            <td>{{ day.day_number }}</td>
-                            <td>{{ day.feed_per_day }}</td>
-                            <td>{{ day.feed_increase_per_day }}</td>
-                            <td>{{ day.accumulated_feed }}</td>
-                            <td>{{ day.feed_code }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+            <table class="table table-bordered table-hover">
+                <thead class="thead-light">
+                    <tr>
+                        <th>Day Number</th>
+                        <th>Feed Per Day (kg)</th>
+                        <th>Feed Increase Per Day (kg)</th>
+                        <th>Accumulated Feed (kg)</th>
+                        <th>Feed Code</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for day in history %}
+                    <tr>
+                        <td>{{ day.day_number }}</td>
+                        <td>{{ day.feed_per_day }}</td>
+                        <td>{{ day.feed_increase_per_day }}</td>
+                        <td>{{ day.accumulated_feed }}</td>
+                        <td>{{ day.feed_code }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
 
-                <a href="{{ url_for('summary') }}" class="btn btn-warning">Back to Summary</a>
-            </div>
+            <!-- Print button -->
+            <button class="btn btn-primary print-only" onclick="printPage()">Print Pond History</button>
         </div>
     </div>
+</div>
 
-    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+    function printPage() {
+        window.print(); // This will open the print dialog
+    }
+</script>
+
 
 </body>
 </html>

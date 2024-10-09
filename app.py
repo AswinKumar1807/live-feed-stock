@@ -304,6 +304,20 @@ def download_feed_sheet():
                 for row in dataframe_to_rows(sheet['pond_data'], index=False, header=True):
                     worksheet.append(row)
 
+                # Set column widths based on the maximum length of the data
+                for column in worksheet.columns:
+                    max_length = 0
+                    column_letter = column[0].column_letter  # Get the column letter (e.g. 'A', 'B', etc.)
+                    for cell in column:
+                        try:
+                            # Update max_length if the cell's length is greater
+                            if len(str(cell.value)) > max_length:
+                                max_length = len(str(cell.value))
+                        except:
+                            pass
+                    adjusted_width = (max_length + 2)  # Adding a little extra space for padding
+                    worksheet.column_dimensions[column_letter].width = adjusted_width
+
     buffer.seek(0)
 
     return send_file(buffer, as_attachment=True, download_name='feed_sheet.xlsx', mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
@@ -690,9 +704,10 @@ def show_history(pond_id):
     history = cursor.fetchall()
 
     cursor.execute('''
-        SELECT ponds.id, ponds.area, ponds.prawn_count, ponds.creation_date
+        SELECT ponds.id, ponds.area, ponds.prawn_count, ponds.creation_date, sites.name AS site_name
         FROM ponds
-        WHERE id = %s
+        JOIN sites ON ponds.site_id = sites.id  -- Assuming a foreign key relationship
+        WHERE ponds.id = %s
     ''', (pond_id,))
     pond_details = cursor.fetchone()
 
@@ -1054,7 +1069,6 @@ def add_consumed_quantity():
         return jsonify({"success": False, "message": str(e)})
     finally:
         cursor.close()
-
 
 @app.route('/save-feed-supplied', methods=['POST'])
 def save_feed_supplied():
