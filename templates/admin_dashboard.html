@@ -49,12 +49,12 @@
                 const form = document.createElement('form');
                 form.method = 'POST';
                 form.action = `/reset_password/${userId}`;
-                
+
                 const input = document.createElement('input');
                 input.type = 'hidden';
                 input.name = 'new_password';
                 input.value = newPassword;
-                
+
                 form.appendChild(input);
                 document.body.appendChild(form);
                 form.submit();
@@ -150,10 +150,17 @@
                                 <td>{{ user.pond_count }}</td>
                                 <td>{{ user.total_prawn_count }}</td>
                                 <td>
-                                    <form action="{{ url_for('delete_user', user_id=user.id) }}" method="POST" onsubmit="return confirm('Are you sure you want to delete this user and all related information?');">
+                                    {% if user.status == 'pending' %}
+                                        <form action="{{ url_for('approve_user', user_id=user.id) }}" method="POST">
+                                            <button type="submit" class="btn btn-success btn-sm">Approve</button>
+                                        </form>
+                                    {% else %}
+                                        <button type="button" class="btn btn-secondary btn-sm" disabled>Approved</button>
+                                    {% endif %}
+                                    <!-- <form action="{{ url_for('delete_user', user_id=user.id) }}" method="POST" onsubmit="return confirm('Are you sure you want to delete this user and all related information?');">
                                         <button type="submit" class="btn btn-danger btn-sm">Delete</button>
-                                    </form>
-                                    <button class="btn btn-warning btn-sm" onclick="resetPassword({{ user.id }})">Reset Password</button>
+                                    </form> -->
+                                    <button class="btn btn-warning btn-sm" onclick="resetPassword({ user.id })">Reset Password</button>
                                 </td>
                             </tr>
                             {% endfor %}

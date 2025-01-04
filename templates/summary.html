@@ -89,7 +89,7 @@
                 <p><strong>Total Ponds:</strong> {{ total_ponds }}</p>
                 <p><strong>Total Area:</strong>
                 {% if total_area is not none %}
-                    {{ total_area | round(2) }} hectare
+                    {{ total_area | round(2) }} Acres
                 {% else %}
                     N/A
                 {% endif %}
@@ -174,7 +174,7 @@
                 <h3>Site: {{ site.name }} ({{ site.location }})</h3>
             </div>
             <div class="card-body">
-                <p><strong>Total Area:</strong> {{ site.total_area }} hectare </p>
+                <p><strong>Total Area:</strong> {{ site.total_area }} Acres </p>
                 <p><strong>Total Prawn Count:</strong> {{ site.total_prawn_count }}</p>
                 <p><strong>Supervisor Name:</strong> {{ site.supervisor_name }}</p>
                 <p><strong>Supervisor Contact:</strong> {{ site.supervisor_contact }}</p>
@@ -266,8 +266,8 @@
                                 <option value="">Select Pond</option>
                                 <option value="6AM - 9AM">6AM - 9AM</option>
                                 <option value="9AM - 12PM">9AM - 12PM</option>
-                                <option value="12PM - 5PM">12PM - 5PM</option>
-                                <option value="5PM - 10PM">5PM - 10PM</option>
+                                <option value="12PM - 5PM">12PM - 2PM</option>
+                                <option value="5PM - 10PM">2PM - 5PM</option>
                             </select>
                         </div>
                         <div class="form-group">

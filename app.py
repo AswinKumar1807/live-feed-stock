@@ -16,11 +16,12 @@ app.config.from_object('config.Config')
 mysql = MySQL(app)
 bcrypt = Bcrypt(app)
 
+
 def init_db():
     with app.app_context():
         cursor = mysql.connection.cursor()
 
-         # Existing tables
+        # Existing tables
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS users (
                 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -93,20 +94,26 @@ def init_db():
             # Insert initial current date
             current_day = 1  # Start with day 1
             currentdate = datetime.datetime.now().date()
-            cursor.execute('INSERT INTO currentdate (current_day, currentdate) VALUES (%s, %s)', (current_day, currentdate))
+            cursor.execute(
+                'INSERT INTO currentdate (current_day, currentdate) VALUES (%s, %s)', (current_day, currentdate))
 
         mysql.connection.commit()
         cursor.close()
+
+
 # Initialize the database
 init_db()
 
 df = pd.read_excel('static/feed.xlsx')
+
+
 def parse_range(value):
     if isinstance(value, str) and '-' in value:
         parts = value.split('-')
         return sum(float(part) for part in parts) / len(parts)
     else:
         return float(value)
+
 
 # Create list of dictionaries
 feed_data = []
@@ -119,6 +126,20 @@ for index, row in df.iterrows():
         "feed_code": str(row['feed_code'])
     })
 
+
+@app.before_request
+def track_navigation():
+    # Initialize history if not present
+    if 'history' not in session:
+        session['history'] = []
+
+    # Update history only for GET requests and avoid logging static files
+    if request.method == 'GET' and not request.path.startswith('/static'):
+        session['history'].append(request.url)
+        # Limit history to the last 3 entries to save session space
+        session['history'] = session['history'][-3:]
+
+
 @app.route('/edit_pond/<int:pond_id>', methods=['GET', 'POST'])
 def edit_pond(pond_id):
     if 'loggedin' not in session:
@@ -129,25 +150,21 @@ def edit_pond(pond_id):
     if request.method == 'POST':
         # Fetch updated details from the form
         new_prawn_count = int(request.form['prawn_count'])
+        # Convert to integer
+        new_current_day = int(request.form['current_day'])
 
-        # Get current details of the pond to keep creation date and current day unchanged
-        cursor.execute('SELECT prawn_count, accumulated_feed, current_day FROM ponds WHERE id = %s', (pond_id,))
-        pond = cursor.fetchone()
+        # Calculate the new creation date based on the current day
+        today_date = datetime.datetime.now().date()
+        new_creation_date = today_date - \
+            datetime.timedelta(days=new_current_day - 1)
 
-        if not pond:
-            flash('Pond not found!', 'danger')
-            return redirect(url_for('summary'))
-
-        current_prawn_count = pond['prawn_count']
-        current_accumulated_feed = pond['accumulated_feed']
-        current_day = pond['current_day']
-
-        # Update pond details in the database without changing creation date or current day
-        cursor.execute('UPDATE ponds SET prawn_count = %s WHERE id = %s',
-                       (new_prawn_count, pond_id))
+        # Update pond details in the database
+        cursor.execute('UPDATE ponds SET prawn_count = %s, current_day = %s, creation_date = %s WHERE id = %s',
+                       (new_prawn_count, new_current_day, new_creation_date, pond_id))
 
         # Recalculate accumulated feed
-        new_accumulated_feed = calculate_accumulated_feed(new_prawn_count, current_day)
+        new_accumulated_feed = calculate_accumulated_feed(
+            new_prawn_count, new_current_day)
 
         # Update accumulated feed in the database
         cursor.execute('UPDATE ponds SET accumulated_feed = %s WHERE id = %s',
@@ -157,7 +174,7 @@ def edit_pond(pond_id):
 
         cursor.close()
         flash('Pond updated successfully!', 'success')
-        return redirect(url_for('summary'))
+        return redirect(two_pages_back())
 
     # Fetch existing pond details
     cursor.execute('SELECT * FROM ponds WHERE id = %s', (pond_id,))
@@ -165,6 +182,16 @@ def edit_pond(pond_id):
 
     cursor.close()
     return render_template('edit_pond.html', pond=pond)
+
+
+def two_pages_back():
+    """
+    Helper function to get the URL two pages back from the session history.
+    """
+    if 'history' in session and len(session['history']) >= 3:
+        # Return the third-to-last URL (two pages back)
+        return session['history'][-2]
+    return None
 
 
 def calculate_feed_details(prawn_count, day):
@@ -190,6 +217,7 @@ def calculate_feed_details(prawn_count, day):
 
     return scaled_feed_details
 
+
 def calculate_accumulated_feed(prawn_count, current_day):
     total_accumulated_feed = 0
     for day in range(1, current_day + 1):
@@ -197,6 +225,7 @@ def calculate_accumulated_feed(prawn_count, current_day):
         if feed_details:
             total_accumulated_feed += feed_details["feed_per_day"]
     return total_accumulated_feed
+
 
 @app.route('/download_feed_sheet')
 def download_feed_sheet():
@@ -238,13 +267,19 @@ def download_feed_sheet():
                 }
 
             # Calculate the additional columns (bags and metric tons)
-            feed_per_day_bag = (feed_details['feed_per_day'] / 25) if feed_details['feed_per_day'] != 'N/A' else 'N/A'
-            feed_increase_per_day_bag = (feed_details['feed_increase_per_day'] / 25) if feed_details['feed_increase_per_day'] != 'N/A' else 'N/A'
-            accumulated_feed_bag = (feed_details['accumulated_feed'] / 25) if feed_details['accumulated_feed'] != 'N/A' else 'N/A'
+            feed_per_day_bag = (
+                feed_details['feed_per_day'] / 25) if feed_details['feed_per_day'] != 'N/A' else 'N/A'
+            feed_increase_per_day_bag = (
+                feed_details['feed_increase_per_day'] / 25) if feed_details['feed_increase_per_day'] != 'N/A' else 'N/A'
+            accumulated_feed_bag = (
+                feed_details['accumulated_feed'] / 25) if feed_details['accumulated_feed'] != 'N/A' else 'N/A'
 
-            feed_per_day_metric = (feed_details['feed_per_day'] / 100) if feed_details['feed_per_day'] != 'N/A' else 'N/A'
-            feed_increase_per_day_metric = (feed_details['feed_increase_per_day'] / 100) if feed_details['feed_increase_per_day'] != 'N/A' else 'N/A'
-            accumulated_feed_metric = (feed_details['accumulated_feed'] / 100) if feed_details['accumulated_feed'] != 'N/A' else 'N/A'
+            feed_per_day_metric = (
+                feed_details['feed_per_day'] / 100) if feed_details['feed_per_day'] != 'N/A' else 'N/A'
+            feed_increase_per_day_metric = (
+                feed_details['feed_increase_per_day'] / 100) if feed_details['feed_increase_per_day'] != 'N/A' else 'N/A'
+            accumulated_feed_metric = (
+                feed_details['accumulated_feed'] / 100) if feed_details['accumulated_feed'] != 'N/A' else 'N/A'
 
             # Append daily feed data
             pond_feed_data.append({
@@ -278,7 +313,8 @@ def download_feed_sheet():
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
         for site_name, ponds_data in site_pond_map.items():
-            ponds_data_sorted = sorted(ponds_data, key=lambda p: p['pond_id'])  # Sort ponds by pond_id
+            ponds_data_sorted = sorted(
+                ponds_data, key=lambda p: p['pond_id'])  # Sort ponds by pond_id
 
             for index, sheet in enumerate(ponds_data_sorted, start=1):
                 # Name the sheet based on the pond number and id
@@ -291,13 +327,17 @@ def download_feed_sheet():
                 # Add site and pond details manually
                 worksheet.append(['Site:', site_name])
                 worksheet.append(['Total Area:', sheet['total_area']])
-                worksheet.append(['Total Prawn Count:', sheet['total_prawn_count']])
-                worksheet.append(['Supervisor Name:', sheet['supervisor_name']])
-                worksheet.append(['Supervisor Contact:', sheet['supervisor_contact']])
+                worksheet.append(
+                    ['Total Prawn Count:', sheet['total_prawn_count']])
+                worksheet.append(
+                    ['Supervisor Name:', sheet['supervisor_name']])
+                worksheet.append(
+                    ['Supervisor Contact:', sheet['supervisor_contact']])
                 worksheet.append(['Pond ID:', sheet['pond_id']])
                 worksheet.append(['Pond Area:', sheet['total_area']])
                 worksheet.append(['Prawn Count:', sheet['total_prawn_count']])
-                worksheet.append(['Creation Date:', sheet['creation_date']])  # New line for Creation Date
+                # New line for Creation Date
+                worksheet.append(['Creation Date:', sheet['creation_date']])
                 worksheet.append([])  # Empty row before the table data
 
                 # Write the pond feed data below the details
@@ -307,7 +347,8 @@ def download_feed_sheet():
                 # Set column widths based on the maximum length of the data
                 for column in worksheet.columns:
                     max_length = 0
-                    column_letter = column[0].column_letter  # Get the column letter (e.g. 'A', 'B', etc.)
+                    # Get the column letter (e.g. 'A', 'B', etc.)
+                    column_letter = column[0].column_letter
                     for cell in column:
                         try:
                             # Update max_length if the cell's length is greater
@@ -315,16 +356,19 @@ def download_feed_sheet():
                                 max_length = len(str(cell.value))
                         except:
                             pass
-                    adjusted_width = (max_length + 2)  # Adding a little extra space for padding
+                    # Adding a little extra space for padding
+                    adjusted_width = (max_length + 2)
                     worksheet.column_dimensions[column_letter].width = adjusted_width
 
     buffer.seek(0)
 
     return send_file(buffer, as_attachment=True, download_name='feed_sheet.xlsx', mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
+
 @app.route('/')
 def index():
     return redirect(url_for('login'))
+
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -347,11 +391,11 @@ def login():
                 flash('Login successful!', 'success')
                 return redirect(url_for('summary'))
             else:
-                flash('Your account is not approved yet. Please contact the admin.', 'danger')
+                flash(
+                    'Your account is not approved yet. Please contact the admin.', 'danger')
         else:
             flash('Incorrect username or password!', 'danger')
     return render_template('login.html')
-
 
 
 @app.route('/signup', methods=['GET', 'POST'])
@@ -359,7 +403,8 @@ def signup():
     if request.method == 'POST':
         username = request.form['username']
         mobile = request.form['mobile']
-        password = bcrypt.generate_password_hash(request.form['password']).decode('utf-8')
+        password = bcrypt.generate_password_hash(
+            request.form['password']).decode('utf-8')
         cursor = mysql.connection.cursor()
         # Set status to 'pending'
         cursor.execute('INSERT INTO users (username, mobile, password, status) VALUES (%s, %s, %s, %s)',
@@ -382,7 +427,8 @@ def approve_user(user_id):
         return redirect(url_for('admin'))
 
     cursor = mysql.connection.cursor()
-    cursor.execute('UPDATE users SET status = %s WHERE id = %s', ('approved', user_id))
+    cursor.execute('UPDATE users SET status = %s WHERE id = %s',
+                   ('approved', user_id))
     mysql.connection.commit()
     cursor.close()
 
@@ -390,20 +436,22 @@ def approve_user(user_id):
     return redirect(url_for('admin'))
 
 
-
 @app.route('/signupadmin', methods=['GET', 'POST'])
 def signupadmin():
     if request.method == 'POST':
         username = request.form['username']
         mobile = request.form['mobile']
-        password = bcrypt.generate_password_hash(request.form['password']).decode('utf-8')
+        password = bcrypt.generate_password_hash(
+            request.form['password']).decode('utf-8')
         cursor = mysql.connection.cursor()
-        cursor.execute('INSERT INTO users (username, mobile, password) VALUES (%s, %s, %s)', (username, mobile, password))
+        cursor.execute(
+            'INSERT INTO users (username, mobile, password) VALUES (%s, %s, %s)', (username, mobile, password))
         mysql.connection.commit()
         cursor.close()
         flash('You have successfully registered! Please login.', 'success')
         return redirect(url_for('admin'))
     return render_template('signup.html')
+
 
 @app.route('/logout')
 def logout():
@@ -411,6 +459,7 @@ def logout():
     session.pop('id', None)
     session.pop('username', None)
     return redirect(url_for('login'))
+
 
 @app.route('/profile', methods=['GET', 'POST'])
 def profile():
@@ -487,7 +536,8 @@ def pond_info(site_num, pond_num):
             return redirect(url_for('summary'))
 
     # Fetch pond details from the database
-    cursor.execute('SELECT area, prawn_count, creation_date, current_day FROM ponds WHERE site_id = %s', (session[f'site_id_{site_num}'],))
+    cursor.execute('SELECT area, prawn_count, creation_date, current_day FROM ponds WHERE site_id = %s',
+                   (session[f'site_id_{site_num}'],))
     pond_details = cursor.fetchall()
 
     cursor.close()
@@ -497,18 +547,21 @@ def pond_info(site_num, pond_num):
                            pond_num=pond_num,
                            pond_details=pond_details)
 
+
 @app.route('/summary', methods=['GET', 'POST'])
 def summary():
     if 'loggedin' not in session:
         return redirect(url_for('login'))
 
-    unit = request.form.get('unit', 'kg')  # Get the selected unit, default to 'kg'
+    # Get the selected unit, default to 'kg'
+    unit = request.form.get('unit', 'kg')
     user_id = session['id']  # Ensure we have the user ID from session
 
     cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
     # Fetch user details
-    cursor.execute('SELECT username, mobile FROM users WHERE id = %s', (user_id,))
+    cursor.execute(
+        'SELECT username, mobile FROM users WHERE id = %s', (user_id,))
     user = cursor.fetchone()
 
     # Fetch overall summary
@@ -554,7 +607,8 @@ def summary():
         GROUP BY feed_code
     ''', (user_id,))
     consumed_quantities = cursor.fetchall()
-    consumed_quantities_dict = {item['feed_code']: item['total_consumed'] for item in consumed_quantities}
+    consumed_quantities_dict = {
+        item['feed_code']: item['total_consumed'] for item in consumed_quantities}
     cursor.close()
 
     # Process feed supplied and consumed data to determine leftovers
@@ -613,7 +667,8 @@ def summary():
         if pond['creation_date']:
             pond_creation_date = pond['creation_date']
             current_day = (today_date - pond_creation_date).days + 1
-            feed_details = calculate_feed_details(pond['prawn_count'], current_day)
+            feed_details = calculate_feed_details(
+                pond['prawn_count'], current_day)
             if feed_details is None:
                 feed_details = {
                     'feed_per_day': 'N/A',
@@ -650,8 +705,10 @@ def summary():
             })
 
         pond['feed_per_day'] = convert_feed_units(pond['feed_per_day'], unit)
-        pond['feed_increase_per_day'] = convert_feed_units(pond['feed_increase_per_day'], unit)
-        pond['accumulated_feed'] = convert_feed_units(pond['accumulated_feed'], unit)
+        pond['feed_increase_per_day'] = convert_feed_units(
+            pond['feed_increase_per_day'], unit)
+        pond['accumulated_feed'] = convert_feed_units(
+            pond['accumulated_feed'], unit)
 
         feed_code = pond['feed_code']
         if feed_code not in site_feed_summary[site_id]:
@@ -659,32 +716,36 @@ def summary():
                 'total_feed_per_day': 0,
                 'total_accumulated_feed': 0
             }
-        site_feed_summary[site_id][feed_code]['total_feed_per_day'] += pond['feed_per_day'] if isinstance(pond['feed_per_day'], (int, float)) else 0
-        site_feed_summary[site_id][feed_code]['total_accumulated_feed'] += pond['accumulated_feed'] if isinstance(pond['accumulated_feed'], (int, float)) else 0
+        site_feed_summary[site_id][feed_code]['total_feed_per_day'] += pond['feed_per_day'] if isinstance(
+            pond['feed_per_day'], (int, float)) else 0
+        site_feed_summary[site_id][feed_code]['total_accumulated_feed'] += pond['accumulated_feed'] if isinstance(
+            pond['accumulated_feed'], (int, float)) else 0
 
-        pond['creation_date'] = pond['creation_date'].strftime('%Y-%m-%d') if pond['creation_date'] else 'N/A'
+        pond['creation_date'] = pond['creation_date'].strftime(
+            '%Y-%m-%d') if pond['creation_date'] else 'N/A'
         pond['harvested_finish'] = pond.get('harvested_finish', False)
         site_data[site_id]['ponds'].append(pond)
 
     for site_id in site_feed_summary:
         for feed_code, summary in site_feed_summary[site_id].items():
-            summary['total_feed_per_day'] = convert_feed_units(summary['total_feed_per_day'], unit)
-            summary['total_accumulated_feed'] = convert_feed_units(summary['total_accumulated_feed'], unit)
+            summary['total_feed_per_day'] = convert_feed_units(
+                summary['total_feed_per_day'], unit)
+            summary['total_accumulated_feed'] = convert_feed_units(
+                summary['total_accumulated_feed'], unit)
 
     return render_template('summary.html',
-                       username=user['username'],
-                       mobile=user['mobile'],
-                       total_ponds=overall['total_ponds'],
-                       total_area=overall['total_area'],
-                       total_prawn_count=overall['total_prawn_count'],
-                       sites=list(site_data.values()),
-                       site_feed_summary=site_feed_summary,
-                       selected_unit=unit,
-                       feed_supplied=feed_supplied,
-                       feed_supplied_total=feed_supplied_total,
-                       consumed_quantities=consumed_quantities_dict,  # Pass the dictionary
-                       leftover_stock=leftover_stock)
-
+                           username=user['username'],
+                           mobile=user['mobile'],
+                           total_ponds=overall['total_ponds'],
+                           total_area=overall['total_area'],
+                           total_prawn_count=overall['total_prawn_count'],
+                           sites=list(site_data.values()),
+                           site_feed_summary=site_feed_summary,
+                           selected_unit=unit,
+                           feed_supplied=feed_supplied,
+                           feed_supplied_total=feed_supplied_total,
+                           consumed_quantities=consumed_quantities_dict,  # Pass the dictionary
+                           leftover_stock=leftover_stock)
 
 
 @app.route('/show_history/<int:pond_id>', methods=['GET'])
@@ -762,7 +823,8 @@ def admin():
     total_sites = cursor.fetchone()['total_sites']
 
     # Fetch total number of ponds and total prawn count
-    cursor.execute('SELECT COUNT(*) as total_ponds, SUM(prawn_count) as total_prawn_count FROM ponds')
+    cursor.execute(
+        'SELECT COUNT(*) as total_ponds, SUM(prawn_count) as total_prawn_count FROM ponds')
     pond_summary = cursor.fetchone()
     total_ponds = pond_summary['total_ponds']
     total_prawn_count = pond_summary['total_prawn_count']
@@ -793,9 +855,9 @@ def admin():
     ''')
     user_details = cursor.fetchall()
 
-
     # Fetch pending users for approval
-    cursor.execute('SELECT id, username, mobile FROM users WHERE status = %s', ('pending',))
+    cursor.execute(
+        'SELECT id, username, mobile FROM users WHERE status = %s', ('pending',))
     pending_users = cursor.fetchall()
 
     cursor.close()
@@ -848,7 +910,7 @@ def user_details(user_id):
     ''', (user_id,))
     feed_supplied_total = cursor.fetchall()
 
-     # Fetch consumed quantity data for each site and feed code
+    # Fetch consumed quantity data for each site and feed code
     cursor.execute('''
         SELECT site_id, feed_code, SUM(quantity_in_kg) as total_consumed
         FROM site_feed
@@ -892,7 +954,8 @@ def user_details(user_id):
         if pond['creation_date']:
             pond_creation_date = pond['creation_date']
             current_day = (today_date - pond_creation_date).days + 1
-            feed_details = calculate_feed_details(pond['prawn_count'], current_day)
+            feed_details = calculate_feed_details(
+                pond['prawn_count'], current_day)
             if feed_details is None:
                 feed_details = {
                     'feed_per_day': 0,
@@ -926,7 +989,8 @@ def user_details(user_id):
             site_data[site_id]['site_feed_summary'][feed_code]['total_accumulated_feed'] += feed_details['accumulated_feed']
             site_data[site_id]['site_feed_summary'][feed_code]['next_days_feed'] += feed_per_day
 
-        pond['creation_date'] = pond['creation_date'].strftime('%Y-%m-%d') if pond['creation_date'] else 'N/A'
+        pond['creation_date'] = pond['creation_date'].strftime(
+            '%Y-%m-%d') if pond['creation_date'] else 'N/A'
         site_data[site_id]['ponds'].append(pond)
 
     # Update consumed quantities in the site data
@@ -944,7 +1008,8 @@ def user_details(user_id):
         feed_code = feed_item['feed_code']
         total_supplied = feed_item['total_supplied']
 
-        total_consumed = sum(site['consumed_quantities'].get(feed_code, 0) for site in site_data.values())
+        total_consumed = sum(site['consumed_quantities'].get(
+            feed_code, 0) for site in site_data.values())
 
         # Calculate leftover feed stock for each feed code
         overall_leftover_feed[feed_code] = total_supplied - total_consumed
@@ -957,25 +1022,24 @@ def user_details(user_id):
                            overall_leftover_feed=overall_leftover_feed)
 
 
-
-
-
-
 @app.route('/admin/delete_user/<int:user_id>', methods=['POST'])
 def delete_user(user_id):
     cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
    # Delete related pond_feed records
-    cursor.execute('DELETE FROM pond_feed WHERE pond_id IN (SELECT id FROM ponds WHERE site_id IN (SELECT id FROM sites WHERE user_id = %s))', (user_id,))
+    cursor.execute(
+        'DELETE FROM pond_feed WHERE pond_id IN (SELECT id FROM ponds WHERE site_id IN (SELECT id FROM sites WHERE user_id = %s))', (user_id,))
 
     # Delete related site_feed records
-    cursor.execute('DELETE FROM site_feed WHERE site_id IN (SELECT id FROM sites WHERE user_id = %s)', (user_id,))
+    cursor.execute(
+        'DELETE FROM site_feed WHERE site_id IN (SELECT id FROM sites WHERE user_id = %s)', (user_id,))
 
     # Delete related feed_supplied records
     cursor.execute('DELETE FROM feed_supplied WHERE user_id = %s', (user_id,))
 
     # Delete related ponds
-    cursor.execute('DELETE FROM ponds WHERE site_id IN (SELECT id FROM sites WHERE user_id = %s)', (user_id,))
+    cursor.execute(
+        'DELETE FROM ponds WHERE site_id IN (SELECT id FROM sites WHERE user_id = %s)', (user_id,))
 
     # Delete related sites
     cursor.execute('DELETE FROM sites WHERE user_id = %s', (user_id,))
@@ -988,19 +1052,23 @@ def delete_user(user_id):
 
     return redirect(url_for('admin'))
 
+
 @app.route('/reset_password/<int:user_id>', methods=['POST'])
 def reset_password(user_id):
     new_password = request.form.get('new_password')
     if new_password:
-        hashed_password = bcrypt.generate_password_hash(new_password).decode('utf-8')
+        hashed_password = bcrypt.generate_password_hash(
+            new_password).decode('utf-8')
         cursor = mysql.connection.cursor()
-        cursor.execute('UPDATE users SET password = %s WHERE id = %s', (hashed_password, user_id))
+        cursor.execute(
+            'UPDATE users SET password = %s WHERE id = %s', (hashed_password, user_id))
         mysql.connection.commit()
         cursor.close()
         flash('Password has been reset successfully.', 'success')
     else:
         flash('Password reset was cancelled.', 'danger')
     return redirect(url_for('admin'))
+
 
 @app.route('/admin/add_feed_supplied', methods=['POST'])
 def add_feed_supplied():
@@ -1026,6 +1094,7 @@ def add_feed_supplied():
         flash(f'An error occurred: {str(e)}', 'error')
         mysql.connection.rollback()
     return redirect(url_for('admin'))
+
 
 @app.route('/user/add_consumed_quantity', methods=['POST'])
 def add_consumed_quantity():
@@ -1069,6 +1138,7 @@ def add_consumed_quantity():
         return jsonify({"success": False, "message": str(e)})
     finally:
         cursor.close()
+
 
 @app.route('/save-feed-supplied', methods=['POST'])
 def save_feed_supplied():
@@ -1118,6 +1188,7 @@ def save_feed_supplied():
         mysql.connection.rollback()
         return jsonify({"success": False, "error": str(e)})
 
+
 @app.route('/telephone')
 def telephone_page():
     contacts = [
@@ -1128,7 +1199,6 @@ def telephone_page():
         {'id': 5, 'name': 'Bala', 'number': '7019791506'}
     ]
     return render_template('telephone.html', contacts=contacts)
-
 
 
 if __name__ == '__main__':
