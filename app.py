@@ -245,7 +245,22 @@ def download_feed_sheet():
     ''', (session['id'],))
     ponds = cursor.fetchall()
 
+    # Fetch consumed quantity data for each site and feed code
+    cursor.execute('''
+        SELECT site_id, feed_code, SUM(quantity_in_kg) as total_consumed
+        FROM site_feed
+        WHERE site_id IN (SELECT id FROM sites WHERE user_id = %s)
+        GROUP BY site_id, feed_code
+    ''', (session['id'],))
+    consumed_quantities = cursor.fetchall()
+
     cursor.close()
+
+    # Create a dictionary to map consumed quantities
+    consumed_quantities_map = {}
+    for entry in consumed_quantities:
+        key = (entry['site_id'], entry['feed_code'])
+        consumed_quantities_map[key] = entry['total_consumed']
 
     feed_sheets = []
 
@@ -265,6 +280,10 @@ def download_feed_sheet():
                     'accumulated_feed': 'N/A',
                     'feed_code': 'N/A'
                 }
+
+            # Fetch consumed quantity from the map
+            consumed_quantity = consumed_quantities_map.get(
+                (pond['site_id'], feed_details['feed_code']), 0)
 
             # Calculate the additional columns (bags and metric tons)
             feed_per_day_bag = (
@@ -287,6 +306,7 @@ def download_feed_sheet():
                 'Feed Per Day (kg)': feed_details['feed_per_day'],
                 'Feed Increase Per Day (kg)': feed_details['feed_increase_per_day'],
                 'Accumulated Feed (kg)': feed_details['accumulated_feed'],
+                'Consumed Quantity (kg)': consumed_quantity,
                 'Feed Per Day (in bag)': feed_per_day_bag,
                 'Feed Increase Per Day (in bag)': feed_increase_per_day_bag,
                 'Accumulated Feed (in bag)': accumulated_feed_bag,

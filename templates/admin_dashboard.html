@@ -157,10 +157,10 @@
                                     {% else %}
                                         <button type="button" class="btn btn-secondary btn-sm" disabled>Approved</button>
                                     {% endif %}
-                                    <!-- <form action="{{ url_for('delete_user', user_id=user.id) }}" method="POST" onsubmit="return confirm('Are you sure you want to delete this user and all related information?');">
-                                        <button type="submit" class="btn btn-danger btn-sm">Delete</button>
-                                    </form> -->
-                                    <button class="btn btn-warning btn-sm" onclick="resetPassword({ user.id })">Reset Password</button>
+                                    <!--<form action="{{ url_for('delete_user', user_id=user.id) }}" method="POST" onsubmit="return confirm('Are you sure you want to delete this user and all related information?');">-->
+                                    <!--    <button type="submit" class="btn btn-danger btn-sm">Delete</button>-->
+                                    <!--</form>-->
+                                    <button class="btn btn-warning btn-sm" onclick="resetPassword({{ user.id }})">Reset Password</button>
                                 </td>
                             </tr>
                             {% endfor %}

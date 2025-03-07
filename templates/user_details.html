@@ -176,7 +176,7 @@
                 <h3>Site: {{ site.name }} ({{ site.location }})</h3>
             </div>
             <div class="card-body">
-                <p><strong>Total Area:</strong> {{ site.total_area | round(2) }} hectare</p>
+                <p><strong>Total Area:</strong> {{ site.total_area | round(2) }} Acres</p>
                 <p><strong>Total Prawn Count:</strong> {{ site.total_prawn_count | round(2) }}</p>
                 <p><strong>Supervisor Name:</strong> {{ site.supervisor_name }}</p>
                 <p><strong>Supervisor Contact:</strong> {{ site.supervisor_contact }}</p>
@@ -311,7 +311,7 @@
             <p>&copy; 2024 Prawn Farm Management. All Rights Reserved.</p>
         </div>
     </footer>
-    
+
     <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.2/dist/umd/popper.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
@@ -508,13 +508,13 @@
     <script>
         function addFeedEntry() {
             const feedSection = document.getElementById('feed-supplied-section');
-        
+
             // Clone the first feed entry
             const newEntry = feedSection.querySelector('.feed-entry').cloneNode(true);
-        
+
             // Clear the quantity input field in the new entry
             newEntry.querySelector('input[name="quantity[]"]').value = '';
-        
+
             // Append the new entry to the feed section
             feedSection.appendChild(newEntry);
         }
